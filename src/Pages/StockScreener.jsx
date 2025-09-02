@@ -9,10 +9,7 @@ import {
 import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
 import Navbar from "../Components/Navbar";
-// Jika file disimpan di src/assets gunakan import ini:
 import screenerXlsx from "../assets/IDX-Stock-Screener-26Agt2025.xlsx";
-// Jika kamu taruh file di /public, hapus import di atas dan
-// nanti pada bagian fetch ganti 'screenerXlsx' jadi '/IDX-Stock-Screener-26Agt2025.xlsx'
 
 const COLUMNS = [
   { id: "No", label: "No", type: "text" },
