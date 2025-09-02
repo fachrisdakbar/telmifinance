@@ -3,7 +3,7 @@ import {Routes, Route} from 'react-router-dom';
 
 import StockScrenner from './Pages/StockScreener';
 import AdminPage from './Pages/admin/AdminPage';
-import Sidebar from '../../telmi-vite/src/layouts/Sidebar';
+import Sidebar from './Components/Sidebar';
 
 function App() {
   return (
