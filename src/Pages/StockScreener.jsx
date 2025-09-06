@@ -37,7 +37,7 @@ const COLUMNS = [
   { id: "YTD", label: "YTD", type: "percent", unit: " %" },
 ];
 
-// Hapus anotasi TypeScript agar bisa dipakai di .jsx
+// Alias query
 const QUERY_ALIASES = {
   ROE: "ROE %",
   ROA: "ROA %",
@@ -86,6 +86,28 @@ function formatCell(val, type, unit = "") {
     : num.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+// Syarat kelayakan ranking
+const qualifies = (row) =>
+  toNumber(row["PER"]) < 10 &&
+  toNumber(row["ROE %"]) > 10 &&
+  toNumber(row["PBV"]) < 1 &&
+  toNumber(row["DER"]) < 1;
+
+// Comparator ranking:
+// 1) ROE% makin besar makin baik
+// 2) PER makin kecil makin baik
+// 3) PBV makin kecil makin baik
+// 4) DER makin kecil makin baik
+const rankCompare = (a, b) => {
+  const roeDiff = toNumber(b["ROE %"]) - toNumber(a["ROE %"]);
+  if (roeDiff !== 0) return roeDiff;
+  const perDiff = toNumber(a["PER"]) - toNumber(b["PER"]);
+  if (perDiff !== 0) return perDiff;
+  const pbvDiff = toNumber(a["PBV"]) - toNumber(b["PBV"]);
+  if (pbvDiff !== 0) return pbvDiff;
+  return toNumber(a["DER"]) - toNumber(b["DER"]);
+};
+
 const StockScreener = () => {
   const [rows, setRows] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -94,7 +116,14 @@ const StockScreener = () => {
   const [query, setQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [showQualifiedOnly, setShowQualifiedOnly] = useState(false);
+
+  // Pagination tabel utama
   const perPage = 10;
+
+  // Pagination untuk Ranking Section
+  const [rankPage, setRankPage] = useState(1);
+  const rankPerPage = 10;
 
   useEffect(() => {
     const load = async () => {
@@ -138,6 +167,27 @@ const StockScreener = () => {
     };
     load();
   }, []);
+
+  // Ranking list global dari seluruh dataset
+  const qualifiedSorted = useMemo(() => {
+    return rows.filter(qualifies).sort(rankCompare);
+  }, [rows]);
+
+  // Peta: Kode Saham -> peringkat (1-based)
+  const rankMap = useMemo(() => {
+    const m = new Map();
+    qualifiedSorted.forEach((r, i) => {
+      m.set(r["Kode Saham"], i + 1);
+    });
+    return m;
+  }, [qualifiedSorted]);
+
+  // Pagination data Ranking
+  const rankTotalPages = Math.max(1, Math.ceil(qualifiedSorted.length / rankPerPage));
+  const rankSlice = useMemo(() => {
+    const start = (rankPage - 1) * rankPerPage;
+    return qualifiedSorted.slice(start, start + rankPerPage);
+  }, [qualifiedSorted, rankPage]);
 
   const onSubmit = (e) => {
     e.preventDefault();
@@ -197,11 +247,21 @@ const StockScreener = () => {
     setFiltered(sorted);
   };
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  // Data yang ditampilkan di tabel utama, tergantung toggle "Hanya yang Lulus Syarat"
+  const displayed = useMemo(() => {
+    return showQualifiedOnly ? filtered.filter(qualifies) : filtered;
+  }, [filtered, showQualifiedOnly]);
+
+  const totalPages = Math.max(1, Math.ceil(displayed.length / perPage));
   const currentSlice = useMemo(() => {
     const start = (currentPage - 1) * perPage;
-    return filtered.slice(start, start + perPage);
-  }, [filtered, currentPage]);
+    return displayed.slice(start, start + perPage);
+  }, [displayed, currentPage]);
+
+  // Reset halaman ketika toggle filter ranking berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [showQualifiedOnly]);
 
   if (loading) {
     return (
@@ -232,6 +292,74 @@ const StockScreener = () => {
       <Navbar />
 
       <div className="px-4 py-6 mx-auto max-w-7xl">
+        {/* RANKING SECTION with pagination */}
+        {qualifiedSorted.length > 0 && (
+          <div className="p-6 mb-6 bg-white rounded-lg shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold">
+                Ranking Saham yang Lulus Syarat 
+                {/* (PER&lt;10, ROE&gt;10%, PBV&lt;1, DER&lt;1) */}
+              </h3>
+              <span className="text-sm text-gray-500">
+                Total: {qualifiedSorted.length.toLocaleString()} emiten
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">#</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Kode</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Nama</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">ROE %</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">PER</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">PBV</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">DER</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {rankSlice.map((r, i) => {
+                    const globalRank = (rankPage - 1) * rankPerPage + i + 1;
+                    return (
+                      <tr key={r["Kode Saham"] || globalRank} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-sm">{globalRank}</td>
+                        <td className="px-4 py-2 text-sm font-medium">{r["Kode Saham"]}</td>
+                        <td className="px-4 py-2 text-sm">{r["Nama Perusahaan"]}</td>
+                        <td className="px-4 py-2 text-sm">{formatCell(r["ROE %"], "percent", " %")}</td>
+                        <td className="px-4 py-2 text-sm">{formatCell(r["PER"], "number")}</td>
+                        <td className="px-4 py-2 text-sm">{formatCell(r["PBV"], "number")}</td>
+                        <td className="px-4 py-2 text-sm">{formatCell(r["DER"], "number")}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination controls for ranking */}
+            <div className="flex items-center justify-center mt-3 space-x-4">
+              <button
+                onClick={() => setRankPage((p) => Math.max(1, p - 1))}
+                disabled={rankPage === 1}
+                className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <span className="text-sm text-gray-600">
+                Halaman {rankPage} dari {rankTotalPages}
+              </span>
+              <button
+                onClick={() => setRankPage((p) => Math.min(rankTotalPages, p + 1))}
+                disabled={rankPage === rankTotalPages}
+                className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="p-6 mb-6 bg-white rounded-lg shadow-sm">
           <h2 className="mb-4 text-2xl font-semibold">Buat Query Pencarian</h2>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -249,13 +377,28 @@ const StockScreener = () => {
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  className="inline-flex items-center px-4 py-2 font-medium text-white bg-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <Play className="mr-2" size={16} />
-                  JALANKAN QUERY
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    className="inline-flex items-center px-4 py-2 font-medium text-white bg-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <Play className="mr-2" size={16} />
+                    JALANKAN QUERY
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowQualifiedOnly((v) => !v)}
+                    className={`inline-flex items-center px-4 py-2 rounded-md border ${
+                      showQualifiedOnly
+                        ? "bg-green-600 text-white border-green-600"
+                        : "border-gray-300 text-gray-700"
+                    }`}
+                  >
+                    <FlaskConicalIcon size={18} className="mr-2" />
+                    {showQualifiedOnly ? "Tampilkan Semua" : "Hanya yang Lulus Syarat"}
+                  </button>
+                </div>
               </form>
             </div>
 
@@ -309,14 +452,37 @@ const StockScreener = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {currentSlice.map((row, idx) => (
                   <tr key={idx} className="hover:bg-gray-50">
-                    {COLUMNS.map((col) => (
-                      <td
-                        key={col.id}
-                        className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap"
-                      >
-                        {formatCell(row[col.id], col.type, col.unit)}
-                      </td>
-                    ))}
+                    {COLUMNS.map((col) => {
+                      const content = formatCell(row[col.id], col.type, col.unit);
+
+                      if (col.id === "Kode Saham") {
+                        const rank = rankMap.get(row["Kode Saham"]);
+                        return (
+                          <td
+                            key={col.id}
+                            className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{content}</span>
+                              {rank && (
+                                <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 border border-green-200">
+                                  Rank #{rank}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      return (
+                        <td
+                          key={col.id}
+                          className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap"
+                        >
+                          {content}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -349,3 +515,4 @@ const StockScreener = () => {
 };
 
 export default StockScreener;
+
