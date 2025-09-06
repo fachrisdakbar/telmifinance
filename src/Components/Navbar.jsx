@@ -2,8 +2,10 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Search, User, ChevronDown } from "lucide-react";
 import logo from "../assets/png/logo.png";
+import { Link } from "react-router-dom";
 
 const Navbar = () => {
+  
   return (
     <motion.nav
       initial={{ y: -50, opacity: 0 }}
@@ -18,7 +20,7 @@ const Navbar = () => {
           </div>
 
           <div className="flex items-center space-x-8 font-medium">
-            <a href="#">FEED</a>
+           <Link to="/bandarmologi" className="text-grey-600 hover:underline">BANDARMOLOGI</Link>
             <a href="#">SCREENS</a>
             <div className="relative group">
               <a href="#">
