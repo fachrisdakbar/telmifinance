@@ -9,7 +9,7 @@ import {
 import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
 import Navbar from "../Components/Navbar";
-import screenerXlsx from "../assets/IDX-Stock-Screener-26Agt2025.xlsx";
+import screenerXlsx from "/data/IDX-Stock-Screener-06Sep2025.xlsx";
 
 const COLUMNS = [
   { id: "No", label: "No", type: "text" },
@@ -509,6 +509,12 @@ const StockScreener = () => {
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
+          <div className="px-6 py-3 text-xs text-gray-600 border-t">
+            <p>
+              <span className="font-semibold">Sumber: IDX</span>
+            </p>
+            <p>Data diupdate setiap hari.</p>
+          </div>
       </div>
     </motion.div>
   );
