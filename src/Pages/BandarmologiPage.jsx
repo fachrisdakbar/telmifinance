@@ -1,3 +1,4 @@
+// BandarmologiPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
 import { Link } from "react-router-dom";
@@ -24,6 +25,10 @@ function matchesQuery(b, q) {
   return tokens.every((t) => code.includes(t) || name.includes(t));
 }
 
+// ==== URL CSV (file dipindah ke public/data) ====
+const ALLBROKER_URL = `${import.meta.env.BASE_URL}data/allbrokertrx.csv`;
+const BROKSUM_URL   = `${import.meta.env.BASE_URL}data/broksum.csv`;
+
 const BandarmologiPage = () => {
   // ========= Section 1: allbrokertrx.csv (Total Value ranking) =========
   const [brokers, setBrokers] = useState([]);
@@ -32,11 +37,13 @@ const BandarmologiPage = () => {
   const [filtered, setFiltered] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [loadErr, setLoadErr] = useState(null);
   const perPage = 10;
 
   // ========= Section 2: broksum.csv (show all first, optional filter Sell Vol = 0) =========
   const [sumData, setSumData] = useState([]);
   const [sumLoading, setSumLoading] = useState(true);
+  const [sumErr, setSumErr] = useState(null);
   const [sumPage, setSumPage] = useState(1);
   const sumPerPage = 10;
   const [sellZeroOnly, setSellZeroOnly] = useState(false); // toggle filter
@@ -44,31 +51,42 @@ const BandarmologiPage = () => {
 
   // -------- Load allbrokertrx.csv --------
   useEffect(() => {
-    Papa.parse("../assets/allbrokertrx.csv", {
+    Papa.parse(ALLBROKER_URL, {
       download: true,
       skipEmptyLines: true,
       complete: (result) => {
-        const rows = result.data;
-        const data = rows
-          .slice(1)
-          .map((row) => ({
-            code: row[0],
-            brokerName: row[1],
-            totalBuy: toNumber(row[2]),
-            totalSell: toNumber(row[3]),
-            totalValue: toNumber(row[4]),
-          }))
-          .filter(
-            (b) =>
-              b.code &&
-              b.brokerName &&
-              (b.totalBuy || b.totalSell || b.totalValue)
-          );
+        try {
+          const rows = result.data;
+          const data = rows
+            .slice(1)
+            .map((row) => ({
+              code: row[0],
+              brokerName: row[1],
+              totalBuy: toNumber(row[2]),
+              totalSell: toNumber(row[3]),
+              totalValue: toNumber(row[4]),
+            }))
+            .filter(
+              (b) =>
+                b.code &&
+                b.brokerName &&
+                (b.totalBuy || b.totalSell || b.totalValue)
+            );
 
-        data.sort(rankCompareValue);
-        setBrokers(data);
-        setFiltered(data);
+          data.sort(rankCompareValue);
+          setBrokers(data);
+          setFiltered(data);
+        } catch (e) {
+          setLoadErr("Gagal memproses allbrokertrx.csv");
+          console.error(e);
+        } finally {
+          setLoading(false);
+        }
+      },
+      error: (err) => {
+        setLoadErr("Gagal memuat allbrokertrx.csv");
         setLoading(false);
+        console.error(err);
       },
     });
   }, []);
@@ -83,64 +101,77 @@ const BandarmologiPage = () => {
   // 13: Frgn Buy Freq, 14: Frgn Buy Vol, 15: Frgn Buy Val(M), 16: Frgn Buy AVG
   // 17: Frgn Sell Freq, 18: Frgn Sell Vol, 19: Frgn Sell Val(M), 20: Frgn Sell AVG
   useEffect(() => {
-  Papa.parse("../assets/broksum.csv", {
-    download: true,
-    skipEmptyLines: true,
-    complete: (result) => {
-      // 1) bersihkan BOM/whitespace dan buang baris benar2 kosong
-      const cleaned = result.data
-        .map((row) =>
-          Array.isArray(row)
-            ? row.map((c) =>
-                typeof c === "string" ? c.replace(/\uFEFF/g, "").trim() : c
-              )
-            : row
-        )
-        .filter(
-          (row) => Array.isArray(row) && row.some((c) => String(c || "").trim() !== "")
-        );
+    Papa.parse(BROKSUM_URL, {
+      download: true,
+      skipEmptyLines: true,
+      complete: (result) => {
+        try {
+          // 1) bersihkan BOM/whitespace dan buang baris benar2 kosong
+          const cleaned = result.data
+            .map((row) =>
+              Array.isArray(row)
+                ? row.map((c) =>
+                    typeof c === "string" ? c.replace(/\uFEFF/g, "").trim() : c
+                  )
+                : row
+            )
+            .filter(
+              (row) =>
+                Array.isArray(row) &&
+                row.some((c) => String(c || "").trim() !== "")
+            );
 
-      // 2) cari index baris pertama yang tampak seperti kode saham (e.g. BUMI, KREN)
-      const firstDataIdx = cleaned.findIndex((r) =>
-        /^[A-Z]{2,5}$/.test(String(r?.[0] || ""))
-      );
+          // 2) cari index baris pertama yang tampak seperti kode saham (e.g. BUMI, KREN)
+          const firstDataIdx = cleaned.findIndex((r) =>
+            /^[A-Z]{2,5}$/.test(String(r?.[0] || ""))
+          );
 
-      // fallback kalau tidak ketemu, minimal buang 1 baris header
-      const rows = cleaned.slice(firstDataIdx >= 0 ? firstDataIdx : 1);
+          // fallback kalau tidak ketemu, minimal buang 1 baris header
+          const rows = cleaned.slice(firstDataIdx >= 0 ? firstDataIdx : 1);
 
-      // 3) mapping kolom sesuai urutan CSV
-      const data = rows
-        .map((row) => ({
-          code: row[0],
-          netValM: toNumber(row[1]),
-          netVol: toNumber(row[2]),
-          frNetValM: toNumber(row[3]),
-          frNetVol: toNumber(row[4]),
-          buyFreq: toNumber(row[5]),
-          buyVol: toNumber(row[6]),
-          buyValM: toNumber(row[7]),
-          buyAvg: toNumber(row[8]),
-          sellFreq: toNumber(row[9]),
-          sellVol: toNumber(row[10]),
-          sellValM: toNumber(row[11]),
-          sellAvg: toNumber(row[12]),
-          fBuyFreq: toNumber(row[13]),
-          fBuyVol: toNumber(row[14]),
-          fBuyValM: toNumber(row[15]),
-          fBuyAvg: toNumber(row[16]),
-          fSellFreq: toNumber(row[17]),
-          fSellVol: toNumber(row[18]),
-          fSellValM: toNumber(row[19]),
-          fSellAvg: toNumber(row[20]),
-        }))
-        // jaga2 kalau masih ada header sisa
-        .filter((r) => r.code && /^[A-Z]{2,5}$/.test(r.code));
+          // 3) mapping kolom sesuai urutan CSV
+          const data = rows
+            .map((row) => ({
+              code: row[0],
+              netValM: toNumber(row[1]),
+              netVol: toNumber(row[2]),
+              frNetValM: toNumber(row[3]),
+              frNetVol: toNumber(row[4]),
+              buyFreq: toNumber(row[5]),
+              buyVol: toNumber(row[6]),
+              buyValM: toNumber(row[7]),
+              buyAvg: toNumber(row[8]),
+              sellFreq: toNumber(row[9]),
+              sellVol: toNumber(row[10]),
+              sellValM: toNumber(row[11]),
+              sellAvg: toNumber(row[12]),
+              fBuyFreq: toNumber(row[13]),
+              fBuyVol: toNumber(row[14]),
+              fBuyValM: toNumber(row[15]),
+              fBuyAvg: toNumber(row[16]),
+              fSellFreq: toNumber(row[17]),
+              fSellVol: toNumber(row[18]),
+              fSellValM: toNumber(row[19]),
+              fSellAvg: toNumber(row[20]),
+            }))
+            // jaga2 kalau masih ada header sisa
+            .filter((r) => r.code && /^[A-Z]{2,5}$/.test(r.code));
 
-      setSumData(data);
-      setSumLoading(false);
-    },
-  });
-}, []);
+          setSumData(data);
+        } catch (e) {
+          setSumErr("Gagal memproses broksum.csv");
+          console.error(e);
+        } finally {
+          setSumLoading(false);
+        }
+      },
+      error: (err) => {
+        setSumErr("Gagal memuat broksum.csv");
+        setSumLoading(false);
+        console.error(err);
+      },
+    });
+  }, []);
 
   // ====== Section 1 pagination & search ======
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
@@ -192,7 +223,9 @@ const BandarmologiPage = () => {
   const sumDisplayed = useMemo(() => {
     let arr = [...sumData];
     if (sellZeroOnly) {
-      arr = arr.filter((r) => r.sellVol === 0).sort((a, b) => b.buyVol - a.buyVol);
+      arr = arr
+        .filter((r) => r.sellVol === 0)
+        .sort((a, b) => b.buyVol - a.buyVol);
       return arr;
     }
     // sort manual bila user klik header
@@ -229,7 +262,7 @@ const BandarmologiPage = () => {
     setSumPage(1);
   };
 
-  // ===== Loading (section 1) =====
+  // ===== Loading & Error (section 1) =====
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -267,6 +300,12 @@ const BandarmologiPage = () => {
           <h2 className="mb-4 text-xl font-semibold">
             Ranking berdasarkan Total Value(K)
           </h2>
+
+          {loadErr && (
+            <div className="p-3 mb-4 text-sm text-red-700 border border-red-200 rounded bg-red-50">
+              {loadErr}
+            </div>
+          )}
 
           {/* Search */}
           <div className="mb-6">
@@ -383,9 +422,7 @@ const BandarmologiPage = () => {
         {/* =================== SECTION 2: broksum (show all → optional filter Sell Vol = 0) =================== */}
         <div className="p-6 mb-8 bg-white rounded-lg shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">
-              Ringkasan Transaksi Harian
-            </h2>
+            <h2 className="text-xl font-semibold">Ringkasan Transaksi Harian</h2>
 
             <button
               onClick={() => {
@@ -402,6 +439,12 @@ const BandarmologiPage = () => {
               {sellZeroOnly ? "Filter: Sell Vol = 0 (ON)" : "Filter: Sell Vol = 0 (OFF)"}
             </button>
           </div>
+
+          {sumErr && (
+            <div className="p-3 mb-4 text-sm text-red-700 border border-red-200 rounded bg-red-50">
+              {sumErr}
+            </div>
+          )}
 
           {sumLoading ? (
             <div className="flex items-center justify-center py-10">
@@ -421,7 +464,7 @@ const BandarmologiPage = () => {
                         className="px-3 py-2 text-xs font-medium text-left text-gray-500 uppercase cursor-pointer"
                         onClick={() => handleSumSort("code")}
                       >
-                        <div className="flex items-center gap-1">
+                        <div className="flex items}{center gap-1">
                           Code {!sellZeroOnly && <ArrowUpDown size={14} />}
                         </div>
                       </th>
