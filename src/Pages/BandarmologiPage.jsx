@@ -26,8 +26,8 @@ function matchesQuery(b, q) {
 }
 
 // ==== URL CSV (file dipindah ke public/data) ====
-const ALLBROKER_URL = `${import.meta.env.BASE_URL}data/allbrokertrx.csv`;
-const BROKSUM_URL   = `${import.meta.env.BASE_URL}data/broksum.csv`;
+const ALLBROKER_URL = `${import.meta.env.BASE_URL}data/allbrokertrxnew.csv`;
+const BROKSUM_URL   = `${import.meta.env.BASE_URL}data/broksum10sep.csv`;
 
 const BandarmologiPage = () => {
   // ========= Section 1: allbrokertrx.csv (Total Value ranking) =========
