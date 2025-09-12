@@ -3,6 +3,7 @@ import {Routes, Route} from 'react-router-dom';
 import StockScrenner from './Pages/StockScreener';
 import AdminPage from './Pages/admin/AdminPage';
 import BandarmologiPage from './Pages/BandarmologiPage';
+import StockRankVolume from './Pages/StockRankVolume';
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
       <Route path="/" element={<StockScrenner />} />
        <Route path="/admin" element={<AdminPage />} />
       <Route path="/bandarmologi" element={<BandarmologiPage />} />
+      <Route path="/stockrankvolume" element={<StockRankVolume />} />
     </Routes>
   );
 }
