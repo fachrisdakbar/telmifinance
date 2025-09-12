@@ -21,7 +21,8 @@ const Navbar = () => {
 
           <div className="flex items-center space-x-8 font-medium">
            <Link to="/bandarmologi" className="text-grey-600 hover:underline">BANDARMOLOGI</Link>
-            <a href="#">SCREENS</a>
+           <Link to="/stockrankvolume" className="text-grey-600 hover:underline">RANKING</Link>
+            {/* <a href="#">SCREENS</a> */}
             <div className="relative group">
               <a href="#">
                 TOOLS
