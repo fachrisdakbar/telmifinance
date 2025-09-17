@@ -433,7 +433,7 @@ const StockScreener = () => {
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">DER</th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Volume</th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Value</th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Change</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Persentase</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
