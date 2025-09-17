@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
+import Papa from "papaparse";
 import Navbar from "../Components/Navbar";
 import screenerXlsx from "/data/IDX-Stock-Screener-06Sep2025.xlsx";
 import volumeXlsx from "/data/Ringkasan-Saham-20250912.xlsx"; // File untuk Volume dan Value
@@ -38,6 +39,7 @@ const COLUMNS = [
   { id: "YTD", label: "YTD", type: "percent", unit: " %" },
   { id: "Volume", label: "Volume", type: "number" }, // Kolom baru
   { id: "Nilai", label: "Value", type: "number" }, // Kolom baru
+  { id: "Change", label: "Persentase", type: "percent", unit: " %" }, // Kolom Change baru
 ];
 
 // Alias query
@@ -52,6 +54,7 @@ const QUERY_ALIASES = {
   Kode: "Kode Saham",
   Volume: "Volume",
   Value: "Nilai",
+  Change: "Change",
 };
 
 function toNumber(input) {
@@ -116,6 +119,7 @@ const rankCompare = (a, b) => {
 const StockScreener = () => {
   const [rows, setRows] = useState([]);
   const [volumeData, setVolumeData] = useState(new Map()); // Map untuk data volume/value
+  const [changeData, setChangeData] = useState(new Map()); // Map untuk data change percentage
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -157,6 +161,24 @@ const StockScreener = () => {
         const ws2 = wb2.Sheets[firstSheetName2];
         const data2 = XLSX.utils.sheet_to_json(ws2, { defval: "" });
 
+        // Load file ketiga (change percentage CSV)
+        const res3 = await fetch("/data/stockrankpercentage.csv");
+        if (!res3.ok) throw new Error("Gagal memuat file change percentage CSV");
+        const csvText = await res3.text();
+        
+        // Parse CSV menggunakan PapaParse
+        const parseResult = await new Promise((resolve, reject) => {
+          Papa.parse(csvText, {
+            header: true,
+            skipEmptyLines: true,
+            dynamicTyping: false,
+            complete: resolve,
+            error: reject
+          });
+        });
+        
+        const data3 = parseResult.data;
+
         // Buat Map untuk data volume berdasarkan Kode Saham
         const volumeMap = new Map();
         data2.forEach(row => {
@@ -170,7 +192,19 @@ const StockScreener = () => {
         });
         setVolumeData(volumeMap);
 
-        // Normalisasi data screener dan gabungkan dengan data volume
+        // Buat Map untuk data change percentage berdasarkan code
+        const changeMap = new Map();
+        data3.forEach(row => {
+          const kode = row["code"]; // Header di CSV adalah "code"
+          if (kode) {
+            changeMap.set(kode, {
+              Change: toNumber(row["change"]) // Assuming header di CSV adalah "change"
+            });
+          }
+        });
+        setChangeData(changeMap);
+
+        // Normalisasi data screener dan gabungkan dengan data volume & change
         const normalized = data1.map((r, i) => {
           const obj = {};
           COLUMNS.forEach((c) => {
@@ -180,6 +214,15 @@ const StockScreener = () => {
               const volumeInfo = volumeMap.get(kode);
               if (volumeInfo) {
                 obj[c.id] = volumeInfo[c.id] || 0;
+              } else {
+                obj[c.id] = 0;
+              }
+            } else if (c.id === "Change") {
+              // Ambil data dari changeMap berdasarkan Kode Saham
+              const kode = r["Kode Saham"];
+              const changeInfo = changeMap.get(kode);
+              if (changeInfo) {
+                obj[c.id] = changeInfo[c.id] || 0;
               } else {
                 obj[c.id] = 0;
               }
@@ -367,7 +410,7 @@ const StockScreener = () => {
                   placeholder="Cari kode saham atau nama perusahaan..."
                   value={rankingSearch}
                   onChange={(e) => setRankingSearch(e.target.value)}
-                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                   <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -390,6 +433,7 @@ const StockScreener = () => {
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">DER</th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Volume</th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Value</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Persentase</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -406,6 +450,14 @@ const StockScreener = () => {
                         <td className="px-4 py-2 text-sm">{formatCell(r["DER"], "number")}</td>
                         <td className="px-4 py-2 text-sm">{formatCell(r["Volume"], "number")}</td>
                         <td className="px-4 py-2 text-sm">{formatCell(r["Nilai"], "number")}</td>
+                        <td className="px-4 py-2 text-sm">
+                          <span className={`${
+                            toNumber(r["Change"]) > 0 ? 'text-green-600' : 
+                            toNumber(r["Change"]) < 0 ? 'text-red-600' : 'text-gray-600'
+                          }`}>
+                            {formatCell(r["Change"], "percent", " %")}
+                          </span>
+                        </td>
                       </tr>
                     );
                   })}
@@ -448,7 +500,7 @@ const StockScreener = () => {
                   <textarea
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder={"Contoh: PER < 12 AND ROE % > 15 AND Volume > 1000000"}
+                    placeholder={"Contoh: PER < 12 AND ROE % > 15 AND Volume > 1000000 AND Change > 0"}
                     className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:ring-0.8 focus:ring-blue-600 focus:border-blue-600 outline-none"
                   />
                 </div>
@@ -482,7 +534,7 @@ const StockScreener = () => {
               <div>
                 <h3 className="mb-3 text-xl font-semibold">Contoh Query Kustom</h3>
                 <p className="mb-4 text-lg text-gray-600">
-                  PER &lt; 12 AND <br /> ROE % &gt; 15 AND <br /> PBV &lt; 2 AND <br /> Volume &gt; 1000000
+                  PER &lt; 12 AND <br /> ROE % &gt; 15 AND <br /> PBV &lt; 2 AND <br /> Volume &gt; 1000000 AND <br /> Change &gt; 0
                 </p>
                 <a
                   href="#"
@@ -546,6 +598,23 @@ const StockScreener = () => {
                                 </span>
                               )}
                             </div>
+                          </td>
+                        );
+                      }
+
+                      if (col.id === "Change") {
+                        const changeValue = toNumber(row[col.id]);
+                        return (
+                          <td
+                            key={col.id}
+                            className="px-6 py-4 text-sm whitespace-nowrap"
+                          >
+                            <span className={`${
+                              changeValue > 0 ? 'text-green-600 font-semibold' : 
+                              changeValue < 0 ? 'text-red-600 font-semibold' : 'text-gray-600'
+                            }`}>
+                              {content}
+                            </span>
                           </td>
                         );
                       }
