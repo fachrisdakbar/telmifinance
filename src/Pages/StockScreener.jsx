@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
 import Navbar from "../Components/Navbar";
 import screenerXlsx from "/data/IDX-Stock-Screener-06Sep2025.xlsx";
+import volumeXlsx from "/data/Ringkasan-Saham-20250912.xlsx"; // File untuk Volume dan Value
 
 const COLUMNS = [
   { id: "No", label: "No", type: "text" },
@@ -35,6 +36,8 @@ const COLUMNS = [
   { id: "NPM %", label: "NPM %", type: "percent", unit: " %" },
   { id: "MTD", label: "MTD", type: "percent", unit: " %" },
   { id: "YTD", label: "YTD", type: "percent", unit: " %" },
+  { id: "Volume", label: "Volume", type: "number" }, // Kolom baru
+  { id: "Nilai", label: "Value", type: "number" }, // Kolom baru
 ];
 
 // Alias query
@@ -47,6 +50,8 @@ const QUERY_ALIASES = {
   "Mkt Cap": "Mkt Cap",
   "Market Cap": "Mkt Cap",
   Kode: "Kode Saham",
+  Volume: "Volume",
+  Value: "Nilai",
 };
 
 function toNumber(input) {
@@ -110,6 +115,7 @@ const rankCompare = (a, b) => {
 
 const StockScreener = () => {
   const [rows, setRows] = useState([]);
+  const [volumeData, setVolumeData] = useState(new Map()); // Map untuk data volume/value
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -124,34 +130,64 @@ const StockScreener = () => {
   // Pagination untuk Ranking Section
   const [rankPage, setRankPage] = useState(1);
   const rankPerPage = 10;
+  
+  // Search untuk Ranking Section
+  const [rankingSearch, setRankingSearch] = useState("");
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
 
-        // Jika file di src/assets (menggunakan import screenerXlsx):
-        const res = await fetch(screenerXlsx);
+        // Load file pertama (screener data)
+        const res1 = await fetch(screenerXlsx);
+        if (!res1.ok) throw new Error("Gagal memuat file screener XLSX");
+        const buf1 = await res1.arrayBuffer();
+        const wb1 = XLSX.read(buf1, { type: "array" });
+        const firstSheetName1 = wb1.SheetNames[0];
+        const ws1 = wb1.Sheets[firstSheetName1];
+        const data1 = XLSX.utils.sheet_to_json(ws1, { defval: "" });
 
-        // Jika file di /public, gunakan ini:
-        // const res = await fetch("/IDX-Stock-Screener-26Agt2025.xlsx");
+        // Load file kedua (volume data)
+        const res2 = await fetch(volumeXlsx);
+        if (!res2.ok) throw new Error("Gagal memuat file volume XLSX");
+        const buf2 = await res2.arrayBuffer();
+        const wb2 = XLSX.read(buf2, { type: "array" });
+        const firstSheetName2 = wb2.SheetNames[0];
+        const ws2 = wb2.Sheets[firstSheetName2];
+        const data2 = XLSX.utils.sheet_to_json(ws2, { defval: "" });
 
-        if (!res.ok) throw new Error("Gagal memuat file XLSX dari assets/public");
-        const buf = await res.arrayBuffer();
-        const wb = XLSX.read(buf, { type: "array" });
-        const firstSheetName = wb.SheetNames[0];
-        const ws = wb.Sheets[firstSheetName];
+        // Buat Map untuk data volume berdasarkan Kode Saham
+        const volumeMap = new Map();
+        data2.forEach(row => {
+          const kode = row["Kode Saham"];
+          if (kode) {
+            volumeMap.set(kode, {
+              Volume: toNumber(row["Volume"]),
+              Nilai: toNumber(row["Nilai"])
+            });
+          }
+        });
+        setVolumeData(volumeMap);
 
-        // sheet_to_json akan membaca header dari baris pertama
-        const data = XLSX.utils.sheet_to_json(ws, { defval: "" });
-
-        // Normalisasi agar sesuai COLUMNS
-        const normalized = data.map((r, i) => {
+        // Normalisasi data screener dan gabungkan dengan data volume
+        const normalized = data1.map((r, i) => {
           const obj = {};
           COLUMNS.forEach((c) => {
-            const raw = r[c.id];
-            if (c.type === "number" || c.type === "percent") obj[c.id] = toNumber(raw);
-            else obj[c.id] = (raw ?? "").toString();
+            if (c.id === "Volume" || c.id === "Nilai") {
+              // Ambil data dari volumeMap berdasarkan Kode Saham
+              const kode = r["Kode Saham"];
+              const volumeInfo = volumeMap.get(kode);
+              if (volumeInfo) {
+                obj[c.id] = volumeInfo[c.id] || 0;
+              } else {
+                obj[c.id] = 0;
+              }
+            } else {
+              const raw = r[c.id];
+              if (c.type === "number" || c.type === "percent") obj[c.id] = toNumber(raw);
+              else obj[c.id] = (raw ?? "").toString();
+            }
           });
           if (!obj["No"]) obj["No"] = String(i + 1);
           return obj;
@@ -172,22 +208,31 @@ const StockScreener = () => {
   const qualifiedSorted = useMemo(() => {
     return rows.filter(qualifies).sort(rankCompare);
   }, [rows]);
+  
+  // Filter ranking berdasarkan search
+  const filteredRanking = useMemo(() => {
+    if (!rankingSearch.trim()) return qualifiedSorted;
+    return qualifiedSorted.filter(row => 
+      row["Kode Saham"]?.toLowerCase().includes(rankingSearch.toLowerCase()) ||
+      row["Nama Perusahaan"]?.toLowerCase().includes(rankingSearch.toLowerCase())
+    );
+  }, [qualifiedSorted, rankingSearch]);
 
   // Peta: Kode Saham -> peringkat (1-based)
   const rankMap = useMemo(() => {
     const m = new Map();
-    qualifiedSorted.forEach((r, i) => {
+    filteredRanking.forEach((r, i) => {
       m.set(r["Kode Saham"], i + 1);
     });
     return m;
-  }, [qualifiedSorted]);
+  }, [filteredRanking]);
 
   // Pagination data Ranking
-  const rankTotalPages = Math.max(1, Math.ceil(qualifiedSorted.length / rankPerPage));
+  const rankTotalPages = Math.max(1, Math.ceil(filteredRanking.length / rankPerPage));
   const rankSlice = useMemo(() => {
     const start = (rankPage - 1) * rankPerPage;
-    return qualifiedSorted.slice(start, start + rankPerPage);
-  }, [qualifiedSorted, rankPage]);
+    return filteredRanking.slice(start, start + rankPerPage);
+  }, [filteredRanking, rankPage]);
 
   const onSubmit = (e) => {
     e.preventDefault();
@@ -258,10 +303,14 @@ const StockScreener = () => {
     return displayed.slice(start, start + perPage);
   }, [displayed, currentPage]);
 
-  // Reset halaman ketika toggle filter ranking berubah
+  // Reset halaman ketika toggle filter ranking berubah atau search berubah
   useEffect(() => {
     setCurrentPage(1);
   }, [showQualifiedOnly]);
+  
+  useEffect(() => {
+    setRankPage(1);
+  }, [rankingSearch]);
 
   if (loading) {
     return (
@@ -292,7 +341,7 @@ const StockScreener = () => {
       <Navbar />
 
       <div className="px-4 py-6 mx-auto max-w-7xl">
-        {/* RANKING SECTION with pagination */}
+        {/* RANKING SECTION with pagination and search */}
         {qualifiedSorted.length > 0 && (
           <div className="p-6 mb-6 bg-white rounded-lg shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -301,8 +350,31 @@ const StockScreener = () => {
                 {/* (PER&lt;10, ROE&gt;10%, PBV&lt;1, DER&lt;1) */}
               </h3>
               <span className="text-sm text-gray-500">
-                Total: {qualifiedSorted.length.toLocaleString()} emiten
+                Total: {filteredRanking.length.toLocaleString()} emiten
+                {rankingSearch && (
+                  <span className="ml-2 text-blue-600">
+                    (dari {qualifiedSorted.length.toLocaleString()})
+                  </span>
+                )}
               </span>
+            </div>
+            
+            {/* Search Bar untuk Ranking */}
+            <div className="mb-4">
+              <div className="relative max-w-md">
+                <input
+                  type="text"
+                  placeholder="Cari kode saham atau nama perusahaan..."
+                  value={rankingSearch}
+                  onChange={(e) => setRankingSearch(e.target.value)}
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                />
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -316,6 +388,8 @@ const StockScreener = () => {
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">PER</th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">PBV</th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">DER</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Volume</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Value</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -330,6 +404,8 @@ const StockScreener = () => {
                         <td className="px-4 py-2 text-sm">{formatCell(r["PER"], "number")}</td>
                         <td className="px-4 py-2 text-sm">{formatCell(r["PBV"], "number")}</td>
                         <td className="px-4 py-2 text-sm">{formatCell(r["DER"], "number")}</td>
+                        <td className="px-4 py-2 text-sm">{formatCell(r["Volume"], "number")}</td>
+                        <td className="px-4 py-2 text-sm">{formatCell(r["Nilai"], "number")}</td>
                       </tr>
                     );
                   })}
@@ -372,7 +448,7 @@ const StockScreener = () => {
                   <textarea
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder={"Contoh: PER < 12 AND ROE % > 15"}
+                    placeholder={"Contoh: PER < 12 AND ROE % > 15 AND Volume > 1000000"}
                     className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:ring-0.8 focus:ring-blue-600 focus:border-blue-600 outline-none"
                   />
                 </div>
@@ -406,7 +482,7 @@ const StockScreener = () => {
               <div>
                 <h3 className="mb-3 text-xl font-semibold">Contoh Query Kustom</h3>
                 <p className="mb-4 text-lg text-gray-600">
-                  PER &lt; 12 AND <br /> ROE % &gt; 15 AND <br /> PBV &lt; 2
+                  PER &lt; 12 AND <br /> ROE % &gt; 15 AND <br /> PBV &lt; 2 AND <br /> Volume &gt; 1000000
                 </p>
                 <a
                   href="#"
@@ -521,4 +597,3 @@ const StockScreener = () => {
 };
 
 export default StockScreener;
-

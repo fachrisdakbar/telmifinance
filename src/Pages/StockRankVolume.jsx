@@ -20,7 +20,7 @@ const COLUMNS = [
   // { id: "Penutupan", label: "Penutupan", type: "number" },
   // { id: "Selisih", label: "Selisih", type: "number" },
   { id: "Volume", label: "Volume", type: "number" },
-  // { id: "Nilai", label: "Nilai", type: "number" },
+  { id: "Nilai", label: "Value", type: "number" },
   // { id: "Frekuensi", label: "Frekuensi", type: "number" },
   // { id: "Index Individual", label: "Index Individual", type: "number" },
   { id: "Offer", label: "Offer", type: "number" },
