@@ -25,7 +25,7 @@ const Navbar = () => {
             {/* <a href="#">SCREENS</a> */}
             <div className="relative group">
               <a href="#">
-                TOOLS
+                ECONOMICS
                 <ChevronDown className="inline-block ml-2 -mt-1" size={16} />
               </a>
               <div className="absolute left-0 hidden w-32 p-2 bg-white rounded-md shadow-lg top-8 group-hover:block">
