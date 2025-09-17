@@ -130,6 +130,9 @@ const StockScreener = () => {
   // Pagination untuk Ranking Section
   const [rankPage, setRankPage] = useState(1);
   const rankPerPage = 10;
+  
+  // Search untuk Ranking Section
+  const [rankingSearch, setRankingSearch] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -205,22 +208,31 @@ const StockScreener = () => {
   const qualifiedSorted = useMemo(() => {
     return rows.filter(qualifies).sort(rankCompare);
   }, [rows]);
+  
+  // Filter ranking berdasarkan search
+  const filteredRanking = useMemo(() => {
+    if (!rankingSearch.trim()) return qualifiedSorted;
+    return qualifiedSorted.filter(row => 
+      row["Kode Saham"]?.toLowerCase().includes(rankingSearch.toLowerCase()) ||
+      row["Nama Perusahaan"]?.toLowerCase().includes(rankingSearch.toLowerCase())
+    );
+  }, [qualifiedSorted, rankingSearch]);
 
   // Peta: Kode Saham -> peringkat (1-based)
   const rankMap = useMemo(() => {
     const m = new Map();
-    qualifiedSorted.forEach((r, i) => {
+    filteredRanking.forEach((r, i) => {
       m.set(r["Kode Saham"], i + 1);
     });
     return m;
-  }, [qualifiedSorted]);
+  }, [filteredRanking]);
 
   // Pagination data Ranking
-  const rankTotalPages = Math.max(1, Math.ceil(qualifiedSorted.length / rankPerPage));
+  const rankTotalPages = Math.max(1, Math.ceil(filteredRanking.length / rankPerPage));
   const rankSlice = useMemo(() => {
     const start = (rankPage - 1) * rankPerPage;
-    return qualifiedSorted.slice(start, start + rankPerPage);
-  }, [qualifiedSorted, rankPage]);
+    return filteredRanking.slice(start, start + rankPerPage);
+  }, [filteredRanking, rankPage]);
 
   const onSubmit = (e) => {
     e.preventDefault();
@@ -291,10 +303,14 @@ const StockScreener = () => {
     return displayed.slice(start, start + perPage);
   }, [displayed, currentPage]);
 
-  // Reset halaman ketika toggle filter ranking berubah
+  // Reset halaman ketika toggle filter ranking berubah atau search berubah
   useEffect(() => {
     setCurrentPage(1);
   }, [showQualifiedOnly]);
+  
+  useEffect(() => {
+    setRankPage(1);
+  }, [rankingSearch]);
 
   if (loading) {
     return (
@@ -325,7 +341,7 @@ const StockScreener = () => {
       <Navbar />
 
       <div className="px-4 py-6 mx-auto max-w-7xl">
-        {/* RANKING SECTION with pagination */}
+        {/* RANKING SECTION with pagination and search */}
         {qualifiedSorted.length > 0 && (
           <div className="p-6 mb-6 bg-white rounded-lg shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -334,8 +350,31 @@ const StockScreener = () => {
                 {/* (PER&lt;10, ROE&gt;10%, PBV&lt;1, DER&lt;1) */}
               </h3>
               <span className="text-sm text-gray-500">
-                Total: {qualifiedSorted.length.toLocaleString()} emiten
+                Total: {filteredRanking.length.toLocaleString()} emiten
+                {rankingSearch && (
+                  <span className="ml-2 text-blue-600">
+                    (dari {qualifiedSorted.length.toLocaleString()})
+                  </span>
+                )}
               </span>
+            </div>
+            
+            {/* Search Bar untuk Ranking */}
+            <div className="mb-4">
+              <div className="relative max-w-md">
+                <input
+                  type="text"
+                  placeholder="Cari kode saham atau nama perusahaan..."
+                  value={rankingSearch}
+                  onChange={(e) => setRankingSearch(e.target.value)}
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                />
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
