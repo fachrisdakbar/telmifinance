@@ -194,11 +194,14 @@ const StockScreener = () => {
 
         // Buat Map untuk data change percentage berdasarkan code
         const changeMap = new Map();
+        // console.log("Loaded change data:", data3);
         data3.forEach(row => {
-          const kode = row["code"]; // Header di CSV adalah "code"
+          const kode = row["Code"]; // Header di CSV adalah "code"
+          // console.log("Processing row:", row["Change"]);
+          // console.log("Processing change data for code:", kode, "with change:", row["change"]);
           if (kode) {
             changeMap.set(kode, {
-              Change: toNumber(row["change"]) // Assuming header di CSV adalah "change"
+              Change: toNumber(row["Change"]) // Assuming header di CSV adalah "change"
             });
           }
         });
@@ -221,6 +224,7 @@ const StockScreener = () => {
               // Ambil data dari changeMap berdasarkan Kode Saham
               const kode = r["Kode Saham"];
               const changeInfo = changeMap.get(kode);
+              // console.log("Change info for", kode, ":", changeInfo);
               if (changeInfo) {
                 obj[c.id] = changeInfo[c.id] || 0;
               } else {
