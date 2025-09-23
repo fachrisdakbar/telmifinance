@@ -39,7 +39,7 @@ const COLUMNS = [
   { id: "YTD", label: "YTD", type: "percent", unit: " %" },
   { id: "Volume", label: "Volume", type: "number" }, // Kolom baru
   { id: "Nilai", label: "Value", type: "number" }, // Kolom baru
-  { id: "Change", label: "Persentase", type: "percent", unit: " %" }, // Kolom Change baru
+  { id: "Change", label: "Persentase", type: "percent", unit: " %" },
 ];
 
 // Alias query
