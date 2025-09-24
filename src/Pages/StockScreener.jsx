@@ -17,6 +17,10 @@ const COLUMNS = [
   { id: "No", label: "No", type: "text" },
   { id: "Nama Perusahaan", label: "Nama Perusahaan", type: "text" },
   { id: "Kode Saham", label: "Kode Saham", type: "text" },
+  { id: "Price", label: "Price", type: "number" },
+  { id: "Change", label: "Persentase", type: "percent", unit: " %" },
+  { id: "Volume", label: "Volume", type: "number" }, // Kolom baru
+  { id: "Nilai", label: "Value", type: "number" }, // Kolom baru
   { id: "Kode Subindustri", label: "Kode Subindustri", type: "text" },
   { id: "Sektor", label: "Sektor", type: "text" },
   { id: "Subsektor", label: "Subsektor", type: "text" },
@@ -57,10 +61,6 @@ const COLUMNS = [
   { id: "NPM %", label: "NPM %", type: "percent", unit: " %" },
   { id: "MTD", label: "MTD", type: "percent", unit: " %" },
   { id: "YTD", label: "YTD", type: "percent", unit: " %" },
-  { id: "Volume", label: "Volume", type: "number" }, // Kolom baru
-  { id: "Nilai", label: "Value", type: "number" }, // Kolom baru
-  { id: "Change", label: "Persentase", type: "percent", unit: " %" },
-  { id: "Price", label: "Price", type: "number" },
 ];
 
 // Alias query
@@ -501,6 +501,9 @@ const StockScreener = () => {
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
                       Price
                     </th>
+                      <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      Percentage
+                    </th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
                       ROE %
                     </th>
@@ -518,9 +521,6 @@ const StockScreener = () => {
                     </th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
                       Value
-                    </th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
-                      Persentase
                     </th>
                   </tr>
                 </thead>
@@ -543,6 +543,19 @@ const StockScreener = () => {
                           {formatCell(r["Price"], "number")}
                         </td>
                         <td className="px-4 py-2 text-sm">
+                          <span
+                            className={`${
+                              toNumber(r["Change"]) > 0
+                                ? "text-green-600"
+                                : toNumber(r["Change"]) < 0
+                                ? "text-red-600"
+                                : "text-gray-600"
+                            }`}
+                          >
+                            {formatCell(r["Change"], "percent", " %")}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-sm">
                           {formatCell(r["ROE %"], "percent", " %")}
                         </td>
                         <td className="px-4 py-2 text-sm">
@@ -559,19 +572,6 @@ const StockScreener = () => {
                         </td>
                         <td className="px-4 py-2 text-sm">
                           {formatCell(r["Nilai"], "number")}
-                        </td>
-                        <td className="px-4 py-2 text-sm">
-                          <span
-                            className={`${
-                              toNumber(r["Change"]) > 0
-                                ? "text-green-600"
-                                : toNumber(r["Change"]) < 0
-                                ? "text-red-600"
-                                : "text-gray-600"
-                            }`}
-                          >
-                            {formatCell(r["Change"], "percent", " %")}
-                          </span>
                         </td>
                       </tr>
                     );
