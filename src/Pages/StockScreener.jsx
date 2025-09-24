@@ -30,16 +30,37 @@ const COLUMNS = [
   { id: "DER", label: "DER", type: "number" },
   { id: "Mkt Cap", label: "Mkt Cap", type: "number", unit: "" },
   { id: "Total Rev", label: "Total Rev", type: "number", unit: "" },
-  { id: "4-wk %Pr. Chg.", label: "4-wk %Pr. Chg.", type: "percent", unit: " %" },
-  { id: "13-wk %Pr. Chg.", label: "13-wk %Pr. Chg.", type: "percent", unit: " %" },
-  { id: "26-wk %Pr. Chg.", label: "26-wk %Pr. Chg.", type: "percent", unit: " %" },
-  { id: "52-wk %Pr. Chg.", label: "52-wk %Pr. Chg.", type: "percent", unit: " %" },
+  {
+    id: "4-wk %Pr. Chg.",
+    label: "4-wk %Pr. Chg.",
+    type: "percent",
+    unit: " %",
+  },
+  {
+    id: "13-wk %Pr. Chg.",
+    label: "13-wk %Pr. Chg.",
+    type: "percent",
+    unit: " %",
+  },
+  {
+    id: "26-wk %Pr. Chg.",
+    label: "26-wk %Pr. Chg.",
+    type: "percent",
+    unit: " %",
+  },
+  {
+    id: "52-wk %Pr. Chg.",
+    label: "52-wk %Pr. Chg.",
+    type: "percent",
+    unit: " %",
+  },
   { id: "NPM %", label: "NPM %", type: "percent", unit: " %" },
   { id: "MTD", label: "MTD", type: "percent", unit: " %" },
   { id: "YTD", label: "YTD", type: "percent", unit: " %" },
   { id: "Volume", label: "Volume", type: "number" }, // Kolom baru
   { id: "Nilai", label: "Value", type: "number" }, // Kolom baru
   { id: "Change", label: "Persentase", type: "percent", unit: " %" },
+  { id: "Price", label: "Price", type: "number" },
 ];
 
 // Alias query
@@ -134,7 +155,7 @@ const StockScreener = () => {
   // Pagination untuk Ranking Section
   const [rankPage, setRankPage] = useState(1);
   const rankPerPage = 10;
-  
+
   // Search untuk Ranking Section
   const [rankingSearch, setRankingSearch] = useState("");
 
@@ -163,9 +184,10 @@ const StockScreener = () => {
 
         // Load file ketiga (change percentage CSV)
         const res3 = await fetch("/data/stockrankpercentage.csv");
-        if (!res3.ok) throw new Error("Gagal memuat file change percentage CSV");
+        if (!res3.ok)
+          throw new Error("Gagal memuat file change percentage CSV");
         const csvText = await res3.text();
-        
+
         // Parse CSV menggunakan PapaParse
         const parseResult = await new Promise((resolve, reject) => {
           Papa.parse(csvText, {
@@ -173,20 +195,30 @@ const StockScreener = () => {
             skipEmptyLines: true,
             dynamicTyping: false,
             complete: resolve,
-            error: reject
+            error: reject,
           });
         });
-        
+
         const data3 = parseResult.data;
+
+        const priceMap = new Map();
+        data3.forEach((row) => {
+          const kode = row["Code"]; // Header di CSV adalah "Code"
+          const price = toNumber(row["Last"]); // Ambil nilai harga dari kolom "Last"
+          if (kode) {
+            priceMap.set(kode, { Price: price });
+          }
+        });
+        setChangeData(priceMap);
 
         // Buat Map untuk data volume berdasarkan Kode Saham
         const volumeMap = new Map();
-        data2.forEach(row => {
+        data2.forEach((row) => {
           const kode = row["Kode Saham"];
           if (kode) {
             volumeMap.set(kode, {
               Volume: toNumber(row["Volume"]),
-              Nilai: toNumber(row["Nilai"])
+              Nilai: toNumber(row["Nilai"]),
             });
           }
         });
@@ -195,13 +227,13 @@ const StockScreener = () => {
         // Buat Map untuk data change percentage berdasarkan code
         const changeMap = new Map();
         // console.log("Loaded change data:", data3);
-        data3.forEach(row => {
+        data3.forEach((row) => {
           const kode = row["Code"]; // Header di CSV adalah "code"
           // console.log("Processing row:", row["Change"]);
           // console.log("Processing change data for code:", kode, "with change:", row["change"]);
           if (kode) {
             changeMap.set(kode, {
-              Change: toNumber(row["Change"]) // Assuming header di CSV adalah "change"
+              Change: toNumber(row["Change"]), // Assuming header di CSV adalah "change"
             });
           }
         });
@@ -230,9 +262,19 @@ const StockScreener = () => {
               } else {
                 obj[c.id] = 0;
               }
+            } else if (c.id === "Price") {
+              // Ambil data harga dari priceMap berdasarkan Kode Saham
+              const kode = r["Kode Saham"];
+              const priceInfo = priceMap.get(kode);
+              if (priceInfo) {
+                obj[c.id] = priceInfo["Price"] || 0;
+              } else {
+                obj[c.id] = 0;
+              }
             } else {
               const raw = r[c.id];
-              if (c.type === "number" || c.type === "percent") obj[c.id] = toNumber(raw);
+              if (c.type === "number" || c.type === "percent")
+                obj[c.id] = toNumber(raw);
               else obj[c.id] = (raw ?? "").toString();
             }
           });
@@ -255,13 +297,18 @@ const StockScreener = () => {
   const qualifiedSorted = useMemo(() => {
     return rows.filter(qualifies).sort(rankCompare);
   }, [rows]);
-  
+
   // Filter ranking berdasarkan search
   const filteredRanking = useMemo(() => {
     if (!rankingSearch.trim()) return qualifiedSorted;
-    return qualifiedSorted.filter(row => 
-      row["Kode Saham"]?.toLowerCase().includes(rankingSearch.toLowerCase()) ||
-      row["Nama Perusahaan"]?.toLowerCase().includes(rankingSearch.toLowerCase())
+    return qualifiedSorted.filter(
+      (row) =>
+        row["Kode Saham"]
+          ?.toLowerCase()
+          .includes(rankingSearch.toLowerCase()) ||
+        row["Nama Perusahaan"]
+          ?.toLowerCase()
+          .includes(rankingSearch.toLowerCase())
     );
   }, [qualifiedSorted, rankingSearch]);
 
@@ -275,7 +322,10 @@ const StockScreener = () => {
   }, [filteredRanking]);
 
   // Pagination data Ranking
-  const rankTotalPages = Math.max(1, Math.ceil(filteredRanking.length / rankPerPage));
+  const rankTotalPages = Math.max(
+    1,
+    Math.ceil(filteredRanking.length / rankPerPage)
+  );
   const rankSlice = useMemo(() => {
     const start = (rankPage - 1) * rankPerPage;
     return filteredRanking.slice(start, start + rankPerPage);
@@ -315,7 +365,8 @@ const StockScreener = () => {
 
   const handleSort = (key) => {
     let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";
+    if (sortConfig.key === key && sortConfig.direction === "asc")
+      direction = "desc";
     setSortConfig({ key, direction });
 
     const colMeta = COLUMNS.find((c) => c.id === key);
@@ -354,7 +405,7 @@ const StockScreener = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [showQualifiedOnly]);
-  
+
   useEffect(() => {
     setRankPage(1);
   }, [rankingSearch]);
@@ -393,7 +444,7 @@ const StockScreener = () => {
           <div className="p-6 mb-6 bg-white rounded-lg shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-semibold">
-                Ranking Saham yang Lulus Syarat 
+                Ranking Saham Telmi Finance
                 {/* (PER&lt;10, ROE&gt;10%, PBV&lt;1, DER&lt;1) */}
               </h3>
               <span className="text-sm text-gray-500">
@@ -405,7 +456,7 @@ const StockScreener = () => {
                 )}
               </span>
             </div>
-            
+
             {/* Search Bar untuk Ranking */}
             <div className="mb-4">
               <div className="relative max-w-md">
@@ -417,8 +468,18 @@ const StockScreener = () => {
                   className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  <svg
+                    className="w-4 h-4 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
                   </svg>
                 </div>
               </div>
@@ -428,37 +489,87 @@ const StockScreener = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">#</th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Kode</th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Nama</th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">ROE %</th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">PER</th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">PBV</th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">DER</th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Volume</th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Value</th>
-                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Persentase</th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      #
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      Kode
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      Nama
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      Price
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      ROE %
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      PER
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      PBV
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      DER
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      Volume
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      Value
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      Persentase
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {rankSlice.map((r, i) => {
                     const globalRank = (rankPage - 1) * rankPerPage + i + 1;
                     return (
-                      <tr key={r["Kode Saham"] || globalRank} className="hover:bg-gray-50">
+                      <tr
+                        key={r["Kode Saham"] || globalRank}
+                        className="hover:bg-gray-50"
+                      >
                         <td className="px-4 py-2 text-sm">{globalRank}</td>
-                        <td className="px-4 py-2 text-sm font-medium">{r["Kode Saham"]}</td>
-                        <td className="px-4 py-2 text-sm">{r["Nama Perusahaan"]}</td>
-                        <td className="px-4 py-2 text-sm">{formatCell(r["ROE %"], "percent", " %")}</td>
-                        <td className="px-4 py-2 text-sm">{formatCell(r["PER"], "number")}</td>
-                        <td className="px-4 py-2 text-sm">{formatCell(r["PBV"], "number")}</td>
-                        <td className="px-4 py-2 text-sm">{formatCell(r["DER"], "number")}</td>
-                        <td className="px-4 py-2 text-sm">{formatCell(r["Volume"], "number")}</td>
-                        <td className="px-4 py-2 text-sm">{formatCell(r["Nilai"], "number")}</td>
+                        <td className="px-4 py-2 text-sm font-medium">
+                          {r["Kode Saham"]}
+                        </td>
                         <td className="px-4 py-2 text-sm">
-                          <span className={`${
-                            toNumber(r["Change"]) > 0 ? 'text-green-600' : 
-                            toNumber(r["Change"]) < 0 ? 'text-red-600' : 'text-gray-600'
-                          }`}>
+                          {r["Nama Perusahaan"]}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {formatCell(r["Price"], "number")}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {formatCell(r["ROE %"], "percent", " %")}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {formatCell(r["PER"], "number")}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {formatCell(r["PBV"], "number")}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {formatCell(r["DER"], "number")}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {formatCell(r["Volume"], "number")}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {formatCell(r["Nilai"], "number")}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          <span
+                            className={`${
+                              toNumber(r["Change"]) > 0
+                                ? "text-green-600"
+                                : toNumber(r["Change"]) < 0
+                                ? "text-red-600"
+                                : "text-gray-600"
+                            }`}
+                          >
                             {formatCell(r["Change"], "percent", " %")}
                           </span>
                         </td>
@@ -482,7 +593,9 @@ const StockScreener = () => {
                 Halaman {rankPage} dari {rankTotalPages}
               </span>
               <button
-                onClick={() => setRankPage((p) => Math.min(rankTotalPages, p + 1))}
+                onClick={() =>
+                  setRankPage((p) => Math.min(rankTotalPages, p + 1))
+                }
                 disabled={rankPage === rankTotalPages}
                 className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -504,7 +617,9 @@ const StockScreener = () => {
                   <textarea
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder={"Contoh: PER < 12 AND ROE % > 15 AND Volume > 1000000 AND Change > 0"}
+                    placeholder={
+                      "Contoh: PER < 12 AND ROE % > 15 AND Volume > 1000000 AND Change > 0"
+                    }
                     className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:ring-0.8 focus:ring-blue-600 focus:border-blue-600 outline-none"
                   />
                 </div>
@@ -528,7 +643,9 @@ const StockScreener = () => {
                     }`}
                   >
                     <FlaskConicalIcon size={18} className="mr-2" />
-                    {showQualifiedOnly ? "Tampilkan Semua" : "Hanya yang Lulus Syarat"}
+                    {showQualifiedOnly
+                      ? "Tampilkan Semua"
+                      : "Hanya yang Lulus Syarat"}
                   </button>
                 </div>
               </form>
@@ -536,9 +653,12 @@ const StockScreener = () => {
 
             <div className="flex flex-col items-start p-6 space-y-4 border border-blue-100 rounded-lg bg-blue-50">
               <div>
-                <h3 className="mb-3 text-xl font-semibold">Contoh Query Kustom</h3>
+                <h3 className="mb-3 text-xl font-semibold">
+                  Contoh Query Kustom
+                </h3>
                 <p className="mb-4 text-lg text-gray-600">
-                  PER &lt; 12 AND <br /> ROE % &gt; 15 AND <br /> PBV &lt; 2 AND <br /> Volume &gt; 1000000 AND <br /> Change &gt; 0
+                  PER &lt; 12 AND <br /> ROE % &gt; 15 AND <br /> PBV &lt; 2 AND{" "}
+                  <br /> Volume &gt; 1000000 AND <br /> Change &gt; 0
                 </p>
                 <a
                   href="#"
@@ -585,7 +705,11 @@ const StockScreener = () => {
                 {currentSlice.map((row, idx) => (
                   <tr key={idx} className="hover:bg-gray-50">
                     {COLUMNS.map((col) => {
-                      const content = formatCell(row[col.id], col.type, col.unit);
+                      const content = formatCell(
+                        row[col.id],
+                        col.type,
+                        col.unit
+                      );
 
                       if (col.id === "Kode Saham") {
                         const rank = rankMap.get(row["Kode Saham"]);
@@ -613,10 +737,15 @@ const StockScreener = () => {
                             key={col.id}
                             className="px-6 py-4 text-sm whitespace-nowrap"
                           >
-                            <span className={`${
-                              changeValue > 0 ? 'text-green-600 font-semibold' : 
-                              changeValue < 0 ? 'text-red-600 font-semibold' : 'text-gray-600'
-                            }`}>
+                            <span
+                              className={`${
+                                changeValue > 0
+                                  ? "text-green-600 font-semibold"
+                                  : changeValue < 0
+                                  ? "text-red-600 font-semibold"
+                                  : "text-gray-600"
+                              }`}
+                            >
                               {content}
                             </span>
                           </td>
@@ -658,12 +787,12 @@ const StockScreener = () => {
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
-          <div className="px-6 py-3 text-xs text-gray-600 border-t">
-            <p>
-              <span className="font-semibold">Sumber: IDX</span>
-            </p>
-            <p>Data diupdate setiap hari.</p>
-          </div>
+        <div className="px-6 py-3 text-xs text-gray-600 border-t">
+          <p>
+            <span className="font-semibold">Sumber: IDX</span>
+          </p>
+          <p>Data diupdate setiap hari.</p>
+        </div>
       </div>
     </motion.div>
   );
