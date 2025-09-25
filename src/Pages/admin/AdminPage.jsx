@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import * as XLSX from "xlsx";
 import { 
   Upload, FileSpreadsheet, CheckCircle, AlertCircle, Zap, BarChart3, TrendingUp,
-  Menu, X, Home, Settings, Users, FileText, PieChart, Database, Bell, LogOut
+  Menu, X, Home, Settings, Users, FileText, PieChart, Database, Bell, LogOut,
+  Axis3dIcon,
+  ChartBarStacked
 } from 'lucide-react';
 
 // Responsive Sidebar component
@@ -10,11 +12,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const menuItems = [
     { icon: Home, label: 'Dashboard', active: false },
     { icon: Database, label: 'Admin Panel', active: true },
-    { icon: BarChart3, label: 'Analytics', active: false },
-    { icon: PieChart, label: 'Reports', active: false },
-    { icon: FileText, label: 'Documents', active: false },
-    { icon: Users, label: 'Users', active: false },
-    { icon: Bell, label: 'Notifications', active: false },
+    { icon: BarChart3, label: 'Stock Data', active: false },
+    { icon: PieChart, label: 'Broker Data', active: false },
+    { icon: FileText, label: 'Economics Data', active: false },
+    { icon: ChartBarStacked, label: 'Screener', active: false },
+    { icon: Axis3dIcon, label: 'AI Screener', active: false },
     { icon: Settings, label: 'Settings', active: false },
   ];
 
@@ -31,30 +33,31 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       {/* Sidebar */}
       <div className={`
         fixed lg:static inset-y-0 left-0 z-50
-        w-64 bg-gradient-to-b from-slate-900 to-slate-800 text-white
-        transform transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        ${!isOpen ? 'lg:w-20' : 'lg:w-64'}
+        bg-gradient-to-b from-slate-900 to-slate-800 text-white
+        transform transition-all duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0 lg:w-20'}
+        lg:${isOpen ? 'w-64' : 'w-20'}
       `}>
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-slate-700">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600">
-                <BarChart3 className="w-6 h-6 text-white" />
-              </div>
               <div className={`transition-all duration-300 ${!isOpen && 'lg:opacity-0 lg:w-0 lg:overflow-hidden'}`}>
-                <h1 className="text-lg font-bold">StockScreener</h1>
-                <p className="text-xs text-slate-400">Admin Portal</p>
+                <h1 className="text-lg font-bold whitespace-nowrap">TFI Screener</h1>
+                <p className="text-xs text-slate-400 whitespace-nowrap">Admin Portal</p>
               </div>
             </div>
             
-            {/* Close button for mobile */}
+            {/* Toggle button for desktop, close for mobile */}
             <button
               onClick={toggleSidebar}
-              className="p-1 rounded lg:hidden hover:bg-slate-700"
+              className="p-2 transition-colors border rounded-lg hover:bg-slate-700 bg-slate-800 border-slate-600"
             >
-              <X className="w-5 h-5" />
+              {isOpen ? (
+                <X className="w-5 h-5 text-white" />
+              ) : (
+                <Menu className="w-5 h-5 text-white" />
+              )}
             </button>
           </div>
 
@@ -74,19 +77,20 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                     }
                   `}
                 >
-                  <IconComponent className={`w-5 h-5 ${item.active ? 'text-white' : 'text-slate-300'}`} />
+                  <IconComponent className={`w-5 h-5 flex-shrink-0 ${item.active ? 'text-white' : 'text-slate-300'}`} />
                   
                   <span className={`
                     font-medium transition-all duration-300
-                    ${!isOpen && 'lg:opacity-0 lg:w-0 lg:overflow-hidden'}
+                    ${!isOpen ? 'lg:opacity-0 lg:w-0 lg:overflow-hidden' : 'opacity-100'}
                     ${item.active ? 'text-white' : 'text-slate-300'}
+                    whitespace-nowrap
                   `}>
                     {item.label}
                   </span>
 
                   {/* Tooltip for collapsed state */}
                   {!isOpen && (
-                    <div className="absolute z-50 invisible hidden px-2 py-1 ml-2 text-sm text-white transition-all duration-200 rounded opacity-0  left-full bg-slate-800 group-hover:opacity-100 group-hover:visible whitespace-nowrap lg:block">
+                    <div className="absolute z-50 invisible hidden px-2 py-1 ml-2 text-sm text-white transition-all duration-200 rounded opacity-0 left-full bg-slate-800 group-hover:opacity-100 group-hover:visible whitespace-nowrap lg:block">
                       {item.label}
                     </div>
                   )}
@@ -103,10 +107,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           {/* Footer */}
           <div className="p-4 border-t border-slate-700">
             <div className="flex items-center gap-3 px-3 py-2 transition-colors rounded-lg cursor-pointer hover:bg-slate-700">
-              <LogOut className="w-5 h-5 text-slate-400" />
+              <LogOut className="flex-shrink-0 w-5 h-5 text-slate-400" />
               <span className={`
                 text-slate-400 font-medium transition-all duration-300
-                ${!isOpen && 'lg:opacity-0 lg:w-0 lg:overflow-hidden'}
+                ${!isOpen ? 'lg:opacity-0 lg:w-0 lg:overflow-hidden' : 'opacity-100'}
+                whitespace-nowrap
               `}>
                 Logout
               </span>
@@ -118,12 +123,13 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   );
 };
 
-const AdminPage = ({ onFileUpload }) => {
+const AdminPage = () => {
   const [file, setFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null); // 'success', 'error', null
   const [dragActive, setDragActive] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [data, setData] = useState([]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -181,7 +187,7 @@ const AdminPage = ({ onFileUpload }) => {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(ws);
         
-        onFileUpload(json);
+        setData(json);
         setUploadStatus('success');
         setIsUploading(false);
       };
@@ -202,38 +208,48 @@ const AdminPage = ({ onFileUpload }) => {
       <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
       
       {/* Main Content */}
-      <div className="flex-1 lg:ml-0">
+      <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'lg:ml-0' : 'lg:ml-0'}`}>
         {/* Mobile Header */}
-        <div className="p-4 bg-white border-b shadow-sm lg:hidden border-slate-200">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={toggleSidebar}
-              className="p-2 transition-colors rounded-lg hover:bg-slate-100"
-            >
-              <Menu className="w-6 h-6 text-slate-600" />
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="p-1 rounded bg-gradient-to-r from-blue-500 to-purple-600">
-                <BarChart3 className="w-5 h-5 text-white" />
-              </div>
-              <h1 className="text-lg font-bold text-slate-800">StockScreener</h1>
+        <div className="flex items-center justify-between p-4 bg-white border-b shadow-sm lg:hidden border-slate-200">
+          <button
+            onClick={toggleSidebar}
+            className="p-2 transition-colors rounded-lg hover:bg-slate-100"
+          >
+            <Menu className="w-6 h-6 text-slate-600" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="p-1 rounded bg-gradient-to-r from-blue-500 to-purple-600">
+              <BarChart3 className="w-5 h-5 text-white" />
             </div>
-            <div className="w-10" />
+            <h1 className="text-lg font-bold text-slate-800">StockScreener</h1>
           </div>
+          <div className="w-10" />
         </div>
 
         <div className="p-4 lg:p-8">
           {/* Header Section */}
           <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600">
-                <Zap className="w-6 h-6 text-white" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600">
+                  <Zap className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-transparent lg:text-3xl bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text">
+                    Admin Dashboard
+                  </h1>
+                  <p className="text-base text-slate-600 lg:text-lg">Upload dan kelola data stock screener dengan mudah</p>
+                </div>
               </div>
-              <h1 className="text-2xl font-bold text-transparent lg:text-3xl bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text">
-                Admin Dashboard
-              </h1>
+              
+              {/* Desktop toggle button */}
+              <button
+                onClick={toggleSidebar}
+                className="items-center justify-center hidden p-3 transition-all duration-200 bg-white border rounded-xl lg:flex hover:shadow-lg hover:bg-slate-50 border-slate-200 group"
+              >
+                <Menu className="w-6 h-6 transition-transform text-slate-700 group-hover:scale-110" />
+              </button>
             </div>
-            <p className="text-base text-slate-600 lg:text-lg">Upload dan kelola data stock screener dengan mudah</p>
           </div>
 
           {/* Stats Cards */}
