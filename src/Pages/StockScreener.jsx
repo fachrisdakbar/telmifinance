@@ -118,6 +118,7 @@ function formatCell(val, type, unit = "") {
 // Syarat kelayakan ranking
 const qualifies = (row) =>
   toNumber(row["PER"]) < 10 &&
+  toNumber(row["PER"]) > 5 &&
   toNumber(row["ROE %"]) > 10 &&
   toNumber(row["PBV"]) < 1 &&
   toNumber(row["DER"]) < 1;
