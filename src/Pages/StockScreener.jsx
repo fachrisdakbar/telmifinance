@@ -538,7 +538,7 @@ const StockScreener = () => {
                             {/* Logo di kiri */}
                             {r["Kode Saham"] && (
                               <img
-                                src={`src/assets/stock/${r["Kode Saham"]}.png`} // Path relatif ke logo
+                                src={`/stock/${r["Kode Saham"]}.png`}
                                 alt={`${r["Kode Saham"]} logo`} // Deskripsi gambar
                                 className="object-contain w-5 h-5" // Ukuran gambar kecil
                               />
