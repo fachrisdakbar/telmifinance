@@ -9,9 +9,9 @@ import {
 import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
-import Navbar from "../Components/Navbar";
 import screenerXlsx from "/data/IDX-Stock-Screener-06Sep2025.xlsx";
 import volumeXlsx from "/data/Ringkasan-Saham-20250912.xlsx"; // File untuk Volume dan Value
+import Navbar from "../layouts/Navbar";
 
 const COLUMNS = [
   { id: "No", label: "No", type: "text" },

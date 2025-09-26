@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx"; // Import XLSX to read Excel files
 import { ChevronLeft, ChevronRight, ArrowUpDown } from "lucide-react"; // Pagination and sorting icons
 import { motion } from "framer-motion";
-import Navbar from "../Components/Navbar";
 import screenerXlsx from "/data/Ringkasan-Saham-20250912.xlsx"; // Make sure the path is correct
+import Navbar from "../layouts/Navbar";
 
 // Define columns for the data you want to display
 const COLUMNS = [

@@ -4,7 +4,7 @@ import Papa from "papaparse";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ArrowUpDown } from "lucide-react";
 import { motion } from "framer-motion";
-import Navbar from "../Components/Navbar";
+import Navbar from "../layouts/Navbar";
 
 // ===== Helpers =====
 function toNumber(input) {
