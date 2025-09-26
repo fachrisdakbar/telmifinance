@@ -501,7 +501,7 @@ const StockScreener = () => {
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
                       Price
                     </th>
-                      <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
                       Percentage
                     </th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
@@ -534,7 +534,18 @@ const StockScreener = () => {
                       >
                         <td className="px-4 py-2 text-sm">{globalRank}</td>
                         <td className="px-4 py-2 text-sm font-medium">
-                          {r["Kode Saham"]}
+                          <div className="flex items-center space-x-2">
+                            {/* Logo di kiri */}
+                            {r["Kode Saham"] && (
+                              <img
+                                src={`src/assets/stock/${r["Kode Saham"]}.png`} // Path relatif ke logo
+                                alt={`${r["Kode Saham"]} logo`} // Deskripsi gambar
+                                className="object-contain w-5 h-5" // Ukuran gambar kecil
+                              />
+                            )}
+                            {/* Kode saham di kanan */}
+                            <span>{r["Kode Saham"]}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-2 text-sm">
                           {r["Nama Perusahaan"]}
