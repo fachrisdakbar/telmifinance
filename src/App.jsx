@@ -3,7 +3,7 @@ import {Routes, Route} from 'react-router-dom';
 import StockScrenner from './Pages/StockScreener';
 import AdminPage from './Pages/admin/AdminPage';
 import BandarmologiPage from './Pages/BandarmologiPage';
-import StockRankVolume from './pages/StockRankVolume';
+import StockRankVolume from './Pages/StockRankVolume';
 import Stocks from './pages/admin/stock/Stocks';
 
 function App() {
