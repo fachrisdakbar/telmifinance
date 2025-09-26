@@ -6,6 +6,7 @@ import BandarmologiPage from './Pages/BandarmologiPage';
 import StockRankVolume from './Pages/StockRankVolume';
 import Stocks from './pages/admin/stock/Stocks';
 
+
 function App() {
   return (
     <Routes>
