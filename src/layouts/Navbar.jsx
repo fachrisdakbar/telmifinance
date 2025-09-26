@@ -24,23 +24,26 @@ const Navbar = () => {
            <Link to="/stockrankvolume" className="text-grey-600 hover:underline">RANKING</Link>
             {/* <a href="#">SCREENS</a> */}
             <div className="relative group">
-              <a href="#">
+              <button
+                type="button"
+                className="flex items-center focus:outline-none bg-transparent text-inherit"
+              >
                 ECONOMICS
                 <ChevronDown className="inline-block ml-2 -mt-1" size={16} />
-              </a>
+              </button>
               <div className="absolute left-0 hidden w-32 p-2 bg-white rounded-md shadow-lg top-8 group-hover:block">
-                <a
-                  href="#"
-                  className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
+                <button
+                  type="button"
+                  className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
                 >
                   Tool 1
-                </a>
-                <a
-                  href="#"
-                  className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
+                </button>
+                <button
+                  type="button"
+                  className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
                 >
                   Tool 2
-                </a>
+                </button>
               </div>
             </div>
           </div>
