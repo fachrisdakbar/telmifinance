@@ -4,7 +4,7 @@ import StockScrenner from './Pages/StockScreener';
 import AdminPage from './Pages/admin/AdminPage';
 import BandarmologiPage from './Pages/BandarmologiPage';
 import StockRankVolume from './Pages/StockRankVolume';
-import Stocks from './pages/admin/stock/Stocks';
+import Stocks from './Pages/admin/stock/Stocks';
 
 
 function App() {
