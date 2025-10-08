@@ -51,7 +51,7 @@ const formatMarketCap = (value) => {
 
 const loadExcelData = async (filename) => {
   try {
-    console.log(`Attempting to load ${filename}...`);
+    // console.log(`Attempting to load ${filename}...`);
     
     // Try fetch from public folder (for local development)
     const response = await fetch(`/${filename}`);
@@ -61,15 +61,15 @@ const loadExcelData = async (filename) => {
     }
     
     const arrayBuffer = await response.arrayBuffer();
-    console.log(`${filename} loaded, size: ${arrayBuffer.byteLength} bytes`);
+    // console.log(`${filename} loaded, size: ${arrayBuffer.byteLength} bytes`);
     
     const workbook = XLSX.read(arrayBuffer, { type: "array" });
     const sheetName = workbook.SheetNames[0];
-    console.log(`${filename} - Sheet name: ${sheetName}`);
+    // console.log(`${filename} - Sheet name: ${sheetName}`);
     
     const worksheet = workbook.Sheets[sheetName];
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-    console.log(`${filename} - Rows parsed: ${jsonData.length}`);
+    // console.log(`${filename} - Rows parsed: ${jsonData.length}`);
     
     return jsonData;
   } catch (error) {
@@ -80,7 +80,7 @@ const loadExcelData = async (filename) => {
 
 const loadCSVData = async (filename) => {
   try {
-    console.log(`Attempting to load CSV ${filename}...`);
+    // console.log(`Attempting to load CSV ${filename}...`);
     
     const response = await fetch(`/${filename}`);
     
@@ -89,14 +89,14 @@ const loadCSVData = async (filename) => {
     }
     
     const text = await response.text();
-    console.log(`${filename} loaded, size: ${text.length} characters`);
+    // console.log(`${filename} loaded, size: ${text.length} characters`);
     
     // Simple CSV parser
     const lines = text.split('\n').filter(line => line.trim());
     if (lines.length === 0) return [];
     
     const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-    console.log(`${filename} - Headers:`, headers);
+    // console.log(`${filename} - Headers:`, headers);
     
     const data = [];
     for (let i = 1; i < lines.length; i++) {
@@ -108,7 +108,7 @@ const loadCSVData = async (filename) => {
       data.push(row);
     }
     
-    console.log(`${filename} - Rows parsed: ${data.length}`);
+    // console.log(`${filename} - Rows parsed: ${data.length}`);
     return data;
   } catch (error) {
     console.error(`Error loading CSV ${filename}:`, error.message);
@@ -149,7 +149,7 @@ const processFinancialData = (revenueData, profitData, stockScreenerData, csvPri
       if (value > 0) {
         stockMap[stockCode].financialData.revenue.push({
           year: year,
-          value: value / 1_000_000_000, // Convert to billions
+          value: value, // Convert to billions
         });
       }
     });
@@ -166,7 +166,7 @@ const processFinancialData = (revenueData, profitData, stockScreenerData, csvPri
       if (value > 0) {
         stockMap[stockCode].financialData.profit.push({
           year: year,
-          value: value / 1_000_000_000, // Convert to billions
+          value: value, // Convert to billions
         });
       }
     });
@@ -174,7 +174,7 @@ const processFinancialData = (revenueData, profitData, stockScreenerData, csvPri
   
   // Process CSV price data (stockrankpercentage.csv)
   if (csvPriceData && csvPriceData.length > 0) {
-    console.log("Processing CSV price data...");
+    // console.log("Processing CSV price data...");
     csvPriceData.forEach((row) => {
       const stockCode = row["Code"] || row["Kode"] || row["code"];
       if (stockCode && stockMap[stockCode]) {
@@ -183,7 +183,7 @@ const processFinancialData = (revenueData, profitData, stockScreenerData, csvPri
         stockMap[stockCode].change = toNumber(row["Change"] || row["change"] || row["Chg"]);
         stockMap[stockCode].volume = row["Volume"] || row["volume"] || row["Vol"] || "Unknown";
         
-        console.log(`Updated ${stockCode}: Price=${stockMap[stockCode].price}, Change=${stockMap[stockCode].change}%, Volume=${stockMap[stockCode].volume}`);
+        // console.log(`Updated ${stockCode}: Price=${stockMap[stockCode].price}, Change=${stockMap[stockCode].change}%, Volume=${stockMap[stockCode].volume}`);
       }
     });
   }
@@ -265,7 +265,7 @@ const StockDetailPage = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        console.log("Starting to load Excel files...");
+        // console.log("Starting to load Excel files...");
         
         const [revenueData, profitData, screenerData, csvPriceData] = await Promise.all([
           loadExcelData("data/revenue-saham.xlsx"),
@@ -274,10 +274,10 @@ const StockDetailPage = () => {
           loadCSVData("data/stockrankpercentage.csv").catch(() => []),
         ]);
         
-        console.log("Revenue data loaded:", revenueData.length, "rows");
-        console.log("Profit data loaded:", profitData.length, "rows");
-        console.log("Screener data loaded:", screenerData.length, "rows");
-        console.log("CSV Price data loaded:", csvPriceData.length, "rows");
+        // console.log("Revenue data loaded:", revenueData.length, "rows");
+        // console.log("Profit data loaded:", profitData.length, "rows");
+        // console.log("Screener data loaded:", screenerData.length, "rows");
+        // console.log("CSV Price data loaded:", csvPriceData.length, "rows");
         
         if (revenueData.length === 0 && profitData.length === 0) {
           console.error("No data loaded from Excel files!");
@@ -285,7 +285,7 @@ const StockDetailPage = () => {
         }
         
         const processedData = processFinancialData(revenueData, profitData, screenerData, csvPriceData);
-        console.log("Processed stocks:", Object.keys(processedData));
+        // console.log("Processed stocks:", Object.keys(processedData));
         setStockData(processedData);
         
         // Set first stock as default or use URL parameter
@@ -334,14 +334,21 @@ const StockDetailPage = () => {
   const stock = stockData[selectedStock];
   if (!stock) return <div>Stock not found</div>;
 
-  const formatCurrency = (value) => {
-    if (value >= 1000000) {
-      return `${(value / 1000000).toFixed(1)}T`;
-    } else if (value >= 1000) {
-      return `${(value / 1000).toFixed(1)}M`;
-    }
-    return value.toFixed(1);
-  };
+const formatCurrency = (value) => {
+  // console.log("Nilai yang diterima:", value); // Tambahkan log untuk memeriksa nilai yang diterima
+
+  if (value >= 1000000000000) { // 1 Triliun
+    return `${(value / 1000000000000).toFixed(1)}T`;
+  } else if (value >= 1000000000) { // 1 Miliar
+    return `${(value / 1000000000).toFixed(1)}B`;
+  } else if (value >= 1000000) { // 1 Juta
+    return `${(value / 1000000).toFixed(1)}M`;
+  } else if (value >= 1000) { // 1 Ribu
+    return `${(value / 1000).toFixed(1)}K`;
+  }
+  return value.toFixed(1); // Untuk angka yang lebih kecil dari 1000
+};
+
 
   const formatNumber = (value) => {
     return value.toLocaleString("id-ID");
@@ -507,7 +514,7 @@ const StockDetailPage = () => {
                   <YAxis stroke="#6B7280" tickFormatter={formatCurrency} />
                   <Tooltip
                     formatter={(value, name) => [
-                      showValues ? `${formatCurrency(value)} Miliar` : "Hidden",
+                      showValues ? `${formatCurrency(value)}` : "Hidden",
                       name === "revenue" ? "Pendapatan" : "Laba Bersih",
                     ]}
                   />
@@ -595,7 +602,7 @@ const StockDetailPage = () => {
                   <XAxis dataKey="year" stroke="#6B7280" />
                   <YAxis stroke="#6B7280" tickFormatter={formatCurrency} />
                   <Tooltip
-                    formatter={(value) => [`${formatCurrency(value)} Miliar`, "Total Aset"]}
+                    formatter={(value) => [`${formatCurrency(value)}`, "Total Aset"]}
                   />
                   <Line
                     type="monotone"
@@ -624,7 +631,7 @@ const StockDetailPage = () => {
                   <YAxis stroke="#6B7280" tickFormatter={formatCurrency} />
                   <Tooltip
                     formatter={(value, name) => [
-                      `${formatCurrency(value)} Miliar`,
+                      `${formatCurrency(value)}`,
                       name === "revenue" ? "Pendapatan" : "Laba Bersih",
                     ]}
                   />
