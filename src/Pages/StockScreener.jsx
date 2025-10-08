@@ -6,6 +6,7 @@ import {
   FlaskConicalIcon,
   ArrowUpDown,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
@@ -32,6 +33,7 @@ const COLUMNS = [
   { id: "ROE %", label: "ROE %", type: "percent", unit: " %" },
   { id: "ROA %", label: "ROA %", type: "percent", unit: " %" },
   { id: "DER", label: "DER", type: "number" },
+  { id: "NPM %", label: "NPM %", type: "percent", unit: " %" },
   { id: "Mkt Cap", label: "Mkt Cap", type: "number", unit: "" },
   { id: "Total Rev", label: "Total Rev", type: "number", unit: "" },
   {
@@ -58,7 +60,6 @@ const COLUMNS = [
     type: "percent",
     unit: " %",
   },
-  { id: "NPM %", label: "NPM %", type: "percent", unit: " %" },
   { id: "MTD", label: "MTD", type: "percent", unit: " %" },
   { id: "YTD", label: "YTD", type: "percent", unit: " %" },
 ];
@@ -538,14 +539,18 @@ const StockScreener = () => {
                           <div className="flex items-center space-x-2">
                             {/* Logo di kiri */}
                             {r["Kode Saham"] && (
+                              <Link to={`/stock/${r["Kode Saham"].toLowerCase()}`} className="flex items-center space-x-2">
                               <img
                                 src={`/stock/${r["Kode Saham"]}.png`}
                                 alt={`${r["Kode Saham"]} logo`} // Deskripsi gambar
                                 className="object-contain w-5 h-5" // Ukuran gambar kecil
                               />
+                              </Link>
                             )}
                             {/* Kode saham di kanan */}
+                             <Link to={`/stock/${r["Kode Saham"].toLowerCase()}`} className="flex items-center space-x-2">
                             <span>{r["Kode Saham"]}</span>
+                            </Link>
                           </div>
                         </td>
                         <td className="px-4 py-2 text-sm">
@@ -568,7 +573,17 @@ const StockScreener = () => {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-sm">
-                          {formatCell(r["ROE %"], "percent", " %")}
+                          <span
+                            className={`${
+                              toNumber(r["ROE %"]) > 0
+                                ? "text-green-600"
+                                : toNumber(r["ROE %"]) < 0
+                                ? "text-red-600"
+                                : "text-gray-600"
+                            }`}
+                          >
+                            {formatCell(r["ROE %"], "percent", " %")}
+                          </span>
                         </td>
                         <td className="px-4 py-2 text-sm">
                           {formatCell(r["PER"], "number")}
@@ -722,16 +737,23 @@ const StockScreener = () => {
                         col.type,
                         col.unit
                       );
+                      const value = toNumber(row[col.id]);
 
                       if (col.id === "Kode Saham") {
-                        const rank = rankMap.get(row["Kode Saham"]);
+                        const kode = row["Kode Saham"];
+                        const rank = rankMap.get(kode);
                         return (
                           <td
                             key={col.id}
                             className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap"
                           >
                             <div className="flex items-center gap-2">
-                              <span className="font-medium">{content}</span>
+                              <Link
+                                to={`/stock/${kode.toLowerCase()}`}
+                                className="font-medium text-grey-600 hover:text-grey-800 hover:underline"
+                              >
+                                {content}
+                              </Link>
                               {rank && (
                                 <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 border border-green-200">
                                   Rank #{rank}
@@ -754,6 +776,27 @@ const StockScreener = () => {
                                 changeValue > 0
                                   ? "text-green-600 font-semibold"
                                   : changeValue < 0
+                                  ? "text-red-600 font-semibold"
+                                  : "text-gray-600"
+                              }`}
+                            >
+                              {content}
+                            </span>
+                          </td>
+                        );
+                      }
+
+                      if (col.type === "percent") {
+                        return (
+                          <td
+                            key={col.id}
+                            className="px-6 py-4 text-sm whitespace-nowrap"
+                          >
+                            <span
+                              className={`${
+                                value > 0
+                                  ? "text-green-600 font-semibold"
+                                  : value < 0
                                   ? "text-red-600 font-semibold"
                                   : "text-gray-600"
                               }`}

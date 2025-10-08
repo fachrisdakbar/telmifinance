@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Select from "react-select";
 import {
   ArrowLeft,
   TrendingUp,
@@ -6,7 +8,6 @@ import {
   BarChart3,
   DollarSign,
   Building,
-  Calendar,
   Eye,
   EyeOff,
 } from "lucide-react";
@@ -26,10 +27,8 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import Papa from "papaparse";
 import * as XLSX from "xlsx";
 
-// Fungsi untuk memformat angka ke dalam format yang sesuai
 const toNumber = (input) => {
   if (input === null || input === undefined) return 0;
   let s = String(input).trim();
@@ -40,179 +39,296 @@ const toNumber = (input) => {
 
 const formatMarketCap = (value) => {
   const number = toNumber(value);
-
   if (number >= 1_000_000_000_000) {
-    return `${(number / 1_000_000_000_000).toFixed(1)} T`; // Trillion
+    return `${(number / 1_000_000_000_000).toFixed(1)} T`;
   } else if (number >= 1_000_000_000) {
-    return `${(number / 1_000_000_000).toFixed(1)} B`; // Billion
+    return `${(number / 1_000_000_000).toFixed(1)} B`;
   } else if (number >= 1_000_000) {
-    return `${(number / 1_000_000).toFixed(1)} M`; // Million
+    return `${(number / 1_000_000).toFixed(1)} M`;
   }
-  return number.toLocaleString(); // For smaller numbers
+  return number.toLocaleString();
 };
 
-// Fungsi untuk membaca file CSV dan Excel
-const loadDataFromCSV = async (csvFile) => {
-  const res = await fetch(csvFile);
-  const text = await res.text();
-  const data = Papa.parse(text, { header: true, skipEmptyLines: true }).data;
-  return data;
+const loadExcelData = async (filename) => {
+  try {
+    console.log(`Attempting to load ${filename}...`);
+    
+    // Try fetch from public folder (for local development)
+    const response = await fetch(`/${filename}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status} - File ${filename} not found in public folder`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    console.log(`${filename} loaded, size: ${arrayBuffer.byteLength} bytes`);
+    
+    const workbook = XLSX.read(arrayBuffer, { type: "array" });
+    const sheetName = workbook.SheetNames[0];
+    console.log(`${filename} - Sheet name: ${sheetName}`);
+    
+    const worksheet = workbook.Sheets[sheetName];
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+    console.log(`${filename} - Rows parsed: ${jsonData.length}`);
+    
+    return jsonData;
+  } catch (error) {
+    console.error(`Error loading ${filename}:`, error.message);
+    return [];
+  }
 };
 
-const loadDataFromExcel = async (excelFile) => {
-  const res = await fetch(excelFile);
-  const buffer = await res.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const sheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
-  const data = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-  return data;
+const loadCSVData = async (filename) => {
+  try {
+    console.log(`Attempting to load CSV ${filename}...`);
+    
+    const response = await fetch(`/${filename}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status} - File ${filename} not found`);
+    }
+    
+    const text = await response.text();
+    console.log(`${filename} loaded, size: ${text.length} characters`);
+    
+    // Simple CSV parser
+    const lines = text.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return [];
+    
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    console.log(`${filename} - Headers:`, headers);
+    
+    const data = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+      const row = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index] || '';
+      });
+      data.push(row);
+    }
+    
+    console.log(`${filename} - Rows parsed: ${data.length}`);
+    return data;
+  } catch (error) {
+    console.error(`Error loading CSV ${filename}:`, error.message);
+    return [];
+  }
 };
 
-// Contoh untuk memuat data dari CSV dan Excel secara bersamaan
-const loadData = async () => {
-  const [csvData, excelData] = await Promise.all([
-    loadDataFromCSV("/data/stockrankpercentage.csv"),
-    loadDataFromExcel("/data/IDX-Stock-Screener-06Sep2025.xlsx"),
-  ]);
-  return { csvData, excelData };
-};
-
-// Fungsi untuk memetakan data ke struktur yang sesuai dengan mockStockData
-const mapDataToMockStockData = (csvData, excelData) => {
-  const mappedData = {};
-
-  // Pemetaan data saham berdasarkan kode saham
-  excelData.forEach((row) => {
+const processFinancialData = (revenueData, profitData, stockScreenerData, csvPriceData) => {
+  const stockMap = {};
+  
+  // Process revenue data
+  revenueData.forEach((row) => {
     const stockCode = row["Kode Saham"];
-    if (stockCode) {
-      if (!mappedData[stockCode]) {
-        mappedData[stockCode] = {
-          code: stockCode,
-          name: row["Nama Perusahaan"] || `Perusahaan ${stockCode}`,
-          price: toNumber(row["Price"]),
-          change: toNumber(row["Change"]),
-          sector: row["Sektor"] || "Unknown",
-          marketCap: row["Mkt Cap"] || "Unknown",
-          volume: row["Volume"] || "Unknown",
-          financialData: {
-            revenue: [],
-            profit: [],
-            assets: [],
-            ratios: [],
-          },
-        };
+    if (!stockCode) return;
+    
+    if (!stockMap[stockCode]) {
+      stockMap[stockCode] = {
+        code: stockCode,
+        name: `Perusahaan ${stockCode}`,
+        price: 0,
+        change: 0,
+        sector: "Unknown",
+        marketCap: "Unknown",
+        volume: "Unknown",
+        financialData: {
+          revenue: [],
+          profit: [],
+          assets: [],
+          ratios: [],
+        },
+      };
+    }
+    
+    // Extract revenue by year
+    const years = Object.keys(row).filter(key => !isNaN(key) && key !== "No");
+    years.forEach(year => {
+      const value = toNumber(row[year]);
+      if (value > 0) {
+        stockMap[stockCode].financialData.revenue.push({
+          year: year,
+          value: value / 1_000_000_000, // Convert to billions
+        });
       }
-
-      // Mapping financial data
-      mappedData[stockCode].financialData.revenue.push({
-        year: row["Year"] || "2024",
-        value: toNumber(row["Total Rev"]), // Misalnya, "Total Rev" adalah revenue
-      });
-
-      mappedData[stockCode].financialData.profit.push({
-        year: row["Year"] || "2024",
-        value: toNumber(row["Nilai"]), // Misalnya, "Nilai" adalah profit
-      });
-
-      mappedData[stockCode].financialData.assets.push({
-        year: row["Year"] || "2024",
-        value: toNumber(row["Total Rev"]) * 5, // Menggunakan asumsi, bisa diubah
-      });
-
-      mappedData[stockCode].financialData.ratios.push({
-        year: row["Year"] || "2024",
-        ROE: toNumber(row["ROE %"]),
-        PER: toNumber(row["PER"]),
-        PBV: toNumber(row["PBV"]),
-        DER: toNumber(row["DER"]),
+    });
+  });
+  
+  // Process profit data
+  profitData.forEach((row) => {
+    const stockCode = row["Kode Saham"];
+    if (!stockCode || !stockMap[stockCode]) return;
+    
+    const years = Object.keys(row).filter(key => !isNaN(key) && key !== "No");
+    years.forEach(year => {
+      const value = toNumber(row[year]);
+      if (value > 0) {
+        stockMap[stockCode].financialData.profit.push({
+          year: year,
+          value: value / 1_000_000_000, // Convert to billions
+        });
+      }
+    });
+  });
+  
+  // Process CSV price data (stockrankpercentage.csv)
+  if (csvPriceData && csvPriceData.length > 0) {
+    console.log("Processing CSV price data...");
+    csvPriceData.forEach((row) => {
+      const stockCode = row["Code"] || row["Kode"] || row["code"];
+      if (stockCode && stockMap[stockCode]) {
+        // Update price, volume, and change from CSV
+        stockMap[stockCode].price = toNumber(row["Last"] || row["Price"] || row["last"] || row["price"]);
+        stockMap[stockCode].change = toNumber(row["Change"] || row["change"] || row["Chg"]);
+        stockMap[stockCode].volume = row["Volume"] || row["volume"] || row["Vol"] || "Unknown";
+        
+        console.log(`Updated ${stockCode}: Price=${stockMap[stockCode].price}, Change=${stockMap[stockCode].change}%, Volume=${stockMap[stockCode].volume}`);
+      }
+    });
+  }
+  
+  // Process stock screener data for current prices and ratios
+  if (stockScreenerData && stockScreenerData.length > 0) {
+    stockScreenerData.forEach((row) => {
+      const stockCode = row["Kode Saham"];
+      if (stockCode && stockMap[stockCode]) {
+        stockMap[stockCode].name = row["Nama Perusahaan"] || stockMap[stockCode].name;
+        
+        // Only update price if not already set from CSV
+        if (stockMap[stockCode].price === 0) {
+          stockMap[stockCode].price = toNumber(row["Price"]);
+        }
+        if (stockMap[stockCode].change === 0) {
+          stockMap[stockCode].change = toNumber(row["Change"]);
+        }
+        
+        stockMap[stockCode].sector = row["Sektor"] || "Unknown";
+        stockMap[stockCode].marketCap = row["Mkt Cap"] || "Unknown";
+        
+        if (stockMap[stockCode].volume === "Unknown") {
+          stockMap[stockCode].volume = row["Volume"] || "Unknown";
+        }
+        
+        // Add ratios if available
+        const year = row["Year"] || "2024";
+        if (stockMap[stockCode].financialData.ratios.length === 0 || 
+            stockMap[stockCode].financialData.ratios[stockMap[stockCode].financialData.ratios.length - 1].year !== year) {
+          stockMap[stockCode].financialData.ratios.push({
+            year: year,
+            ROE: toNumber(row["ROE %"]) || 15.5,
+            PER: toNumber(row["PER"]) || 12.5,
+            PBV: toNumber(row["PBV"]) || 2.1,
+            DER: toNumber(row["DER"]) || 0.75,
+          });
+        }
+      }
+    });
+  }
+  
+  // Generate assets and additional ratios based on revenue
+  Object.keys(stockMap).forEach(code => {
+    const stock = stockMap[code];
+    
+    // Generate assets (assuming assets = revenue * 5 as rough estimate)
+    stock.financialData.assets = stock.financialData.revenue.map(rev => ({
+      year: rev.year,
+      value: rev.value * 5,
+    }));
+    
+    // If no ratios exist, generate mock ratios
+    if (stock.financialData.ratios.length === 0) {
+      stock.financialData.revenue.forEach(rev => {
+        stock.financialData.ratios.push({
+          year: rev.year,
+          ROE: 15.5 + Math.random() * 5,
+          PER: 12.5 - Math.random() * 3,
+          PBV: 2.1 + Math.random() * 0.5,
+          DER: 0.75 - Math.random() * 0.1,
+        });
       });
     }
   });
-
-  // Jika data CSV tersedia, kita bisa memperkaya data dengan informasi perubahan harga saham
-  csvData.forEach((row) => {
-    const stockCode = row["Code"];
-    if (mappedData[stockCode]) {
-      mappedData[stockCode].price = toNumber(row["Last"]);
-      mappedData[stockCode].change = toNumber(row["Change"]);
-    }
-  });
-
-  // Kembalikan data yang sudah dipetakan
-  return mappedData;
+  
+  return stockMap;
 };
 
-// Fungsi untuk membuat data mock
-const generateMockStockData = () => {
-  return {
-    BBCA: {
-      code: "BBCA",
-      name: "Bank Central Asia Tbk",
-      price: 10200,
-      change: 2.5,
-      sector: "Perbankan",
-      marketCap: "1.2T",
-      volume: "15.2M",
-      financialData: {
-        revenue: [
-          { year: "2020", value: 65000 },
-          { year: "2021", value: 68000 },
-          { year: "2022", value: 72000 },
-          { year: "2023", value: 78000 },
-          { year: "2024", value: 85000 },
-        ],
-        profit: [
-          { year: "2020", value: 15000 },
-          { year: "2021", value: 16500 },
-          { year: "2022", value: 18000 },
-          { year: "2023", value: 20000 },
-          { year: "2024", value: 22500 },
-        ],
-        assets: [
-          { year: "2020", value: 950000 },
-          { year: "2021", value: 1050000 },
-          { year: "2022", value: 1150000 },
-          { year: "2023", value: 1250000 },
-          { year: "2024", value: 1350000 },
-        ],
-        ratios: [
-          { year: "2020", ROE: 14.2, PER: 12.5, PBV: 1.8, DER: 0.85 },
-          { year: "2021", ROE: 15.1, PER: 11.8, PBV: 1.9, DER: 0.82 },
-          { year: "2022", ROE: 16.3, PER: 10.5, PBV: 2.1, DER: 0.78 },
-          { year: "2023", ROE: 17.8, PER: 9.2, PBV: 2.3, DER: 0.75 },
-          { year: "2024", ROE: 18.5, PER: 8.5, PBV: 2.4, DER: 0.72 },
-        ],
-      },
-    },
-    // Tambahkan saham lainnya jika diperlukan
-  };
-};
-
-// Komponen utama StockDetailPage
 const StockDetailPage = () => {
   const [stockData, setStockData] = useState({});
-  const [selectedStock, setSelectedStock] = useState("BBCA");
+  const [selectedStock, setSelectedStock] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
   const [showValues, setShowValues] = useState(true);
+  const [loading, setLoading] = useState(true);
+   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
-        const { csvData, excelData } = await loadData();
-        const mappedData = mapDataToMockStockData(csvData, excelData);
-        setStockData(mappedData);
+        console.log("Starting to load Excel files...");
+        
+        const [revenueData, profitData, screenerData, csvPriceData] = await Promise.all([
+          loadExcelData("data/revenue-saham.xlsx"),
+          loadExcelData("data/netprofit-saham.xlsx"),
+          loadExcelData("data/IDX-Stock-Screener-06Sep2025.xlsx").catch(() => []),
+          loadCSVData("data/stockrankpercentage.csv").catch(() => []),
+        ]);
+        
+        console.log("Revenue data loaded:", revenueData.length, "rows");
+        console.log("Profit data loaded:", profitData.length, "rows");
+        console.log("Screener data loaded:", screenerData.length, "rows");
+        console.log("CSV Price data loaded:", csvPriceData.length, "rows");
+        
+        if (revenueData.length === 0 && profitData.length === 0) {
+          console.error("No data loaded from Excel files!");
+          alert("Tidak dapat memuat file Excel. Pastikan file berada di folder public/data/");
+        }
+        
+        const processedData = processFinancialData(revenueData, profitData, screenerData, csvPriceData);
+        console.log("Processed stocks:", Object.keys(processedData));
+        setStockData(processedData);
+        
+        // Set first stock as default or use URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const stockParam = window.location.pathname.split('/').pop()?.toUpperCase();
+        
+        if (stockParam && processedData[stockParam]) {
+          setSelectedStock(stockParam);
+        } else {
+          const firstStock = Object.keys(processedData)[0];
+          if (firstStock) {
+            setSelectedStock(firstStock);
+          }
+        }
       } catch (error) {
         console.error("Error fetching data:", error);
-        setStockData(generateMockStockData()); // Gunakan data mock jika gagal
+        alert(`Error: ${error.message}`);
       }
+      setLoading(false);
     };
 
     fetchData();
   }, []);
 
+    const options = Object.keys(stockData).map((code) => ({
+    value: code,
+    label: `${code} - ${stockData[code].name}`,
+  }));
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-12 h-12 border-b-2 border-blue-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   if (!stockData || Object.keys(stockData).length === 0) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+        <div className="text-xl text-gray-600">No stock data available</div>
+      </div>
+    );
   }
 
   const stock = stockData[selectedStock];
@@ -224,32 +340,44 @@ const StockDetailPage = () => {
     } else if (value >= 1000) {
       return `${(value / 1000).toFixed(1)}M`;
     }
-    return value.toString();
+    return value.toFixed(1);
   };
 
   const formatNumber = (value) => {
     return value.toLocaleString("id-ID");
   };
 
-  const revenueVsProfit = stock.financialData.revenue.map((item, index) => ({
-    year: item.year,
-    revenue: item.value,
-    profit: stock.financialData.profit[index]?.value || 0,
-  }));
+  const revenueVsProfit = stock.financialData.revenue.map((item) => {
+    const profitItem = stock.financialData.profit.find(p => p.year === item.year);
+    return {
+      year: item.year,
+      revenue: item.value,
+      profit: profitItem ? profitItem.value : 0,
+    };
+  });
 
-  const latestRatios =
-    stock.financialData.ratios[stock.financialData.ratios.length - 1];
+  const latestRatios = stock.financialData.ratios[stock.financialData.ratios.length - 1] || {
+    ROE: 0, PER: 0, PBV: 0, DER: 0
+  };
+
+  //Back
+  const handleBackClick = () => {
+    navigate("/");
+  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <div className="px-4 py-8 mx-auto max-w-7xl">
         {/* Header */}
         <div className="flex items-center mb-8">
-          <button className="flex items-center px-4 py-2 mr-6 text-gray-600 transition-colors bg-white rounded-lg shadow-sm hover:bg-gray-50">
+          <button 
+          onClick={handleBackClick}
+          className="flex items-center px-4 py-2 mr-6 text-gray-600 transition-colors bg-white rounded-lg shadow-sm hover:bg-gray-50">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Kembali ke Ranking
           </button>
-          <select
+          {/* <select
             value={selectedStock}
             onChange={(e) => setSelectedStock(e.target.value)}
             className="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -259,7 +387,14 @@ const StockDetailPage = () => {
                 {code} - {stockData[code].name}
               </option>
             ))}
-          </select>
+          </select> */}
+            <Select
+            value={options.find(option => option.value === selectedStock)}
+            onChange={(e) => setSelectedStock(e.value)}
+            options={options}
+            className="w-72"
+            placeholder="Pilih Stock..."
+          />
         </div>
 
         {/* Stock Header Card */}
@@ -341,7 +476,7 @@ const StockDetailPage = () => {
             <div className="p-6 bg-white shadow-lg rounded-xl">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-semibold text-gray-900">
-                  Pendapatan vs Laba Bersih
+                  Pendapatan vs Laba Bersih (Miliar)
                 </h3>
                 <button
                   onClick={() => setShowValues(!showValues)}
@@ -356,31 +491,13 @@ const StockDetailPage = () => {
                 </button>
               </div>
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart
-                  data={stock.financialData.revenue.map((item, index) => ({
-                    year: item.year,
-                    revenue: item.value,
-                    profit: stock.financialData.profit[index].value,
-                  }))}
-                >
+                <AreaChart data={revenueVsProfit}>
                   <defs>
-                    <linearGradient
-                      id="colorRevenue"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
                     </linearGradient>
-                    <linearGradient
-                      id="colorProfit"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
+                    <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                     </linearGradient>
@@ -417,13 +534,7 @@ const StockDetailPage = () => {
               <h3 className="mb-6 text-xl font-semibold text-gray-900">
                 Rasio Keuangan Terkini
               </h3>
-
               {(() => {
-                const latestRatios =
-                  stock.financialData.ratios[
-                    stock.financialData.ratios.length - 1
-                  ];
-
                 const ratioData = [
                   { name: "ROE", value: latestRatios.ROE, color: "#3B82F6" },
                   { name: "PER", value: latestRatios.PER, color: "#10B981" },
@@ -448,13 +559,9 @@ const StockDetailPage = () => {
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip
-                          formatter={(value, name) => [`${value}`, name]}
-                        />
+                        <Tooltip formatter={(value) => [value.toFixed(2), ""]} />
                       </PieChart>
                     </ResponsiveContainer>
-
-                    {/* Legend */}
                     <div className="grid grid-cols-2 gap-4 mt-6">
                       {ratioData.map((r, i) => (
                         <div key={i} className="flex items-center">
@@ -463,7 +570,7 @@ const StockDetailPage = () => {
                             style={{ backgroundColor: r.color }}
                           ></span>
                           <span className="text-sm text-gray-700">
-                            {r.name}: {r.value}
+                            {r.name}: {r.value.toFixed(2)}
                           </span>
                         </div>
                       ))}
@@ -488,10 +595,7 @@ const StockDetailPage = () => {
                   <XAxis dataKey="year" stroke="#6B7280" />
                   <YAxis stroke="#6B7280" tickFormatter={formatCurrency} />
                   <Tooltip
-                    formatter={(value) => [
-                      `${formatCurrency(value)} Miliar`,
-                      "Total Aset",
-                    ]}
+                    formatter={(value) => [`${formatCurrency(value)} Miliar`, "Total Aset"]}
                   />
                   <Line
                     type="monotone"
@@ -508,7 +612,7 @@ const StockDetailPage = () => {
             {/* Revenue & Profit Comparison */}
             <div className="p-6 bg-white shadow-lg rounded-xl">
               <h3 className="mb-6 text-xl font-semibold text-gray-900">
-                Perbandingan Pendapatan & Laba
+                Perbandingan Pendapatan & Laba (Miliar)
               </h3>
               <ResponsiveContainer width="100%" height={400}>
                 <BarChart
@@ -541,6 +645,7 @@ const StockDetailPage = () => {
             </div>
           </div>
         )}
+
         {activeTab === "ratios" && (
           <div className="space-y-8">
             {/* ROE Trend */}
@@ -559,7 +664,7 @@ const StockDetailPage = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                   <XAxis dataKey="year" stroke="#6B7280" />
                   <YAxis stroke="#6B7280" />
-                  <Tooltip formatter={(value) => [`${value}%`, "ROE"]} />
+                  <Tooltip formatter={(value) => [`${value.toFixed(2)}%`, "ROE"]} />
                   <Area
                     type="monotone"
                     dataKey="ROE"
@@ -652,7 +757,7 @@ const StockDetailPage = () => {
                       {ratio.name}
                     </div>
                     <div className="mt-2 text-2xl font-bold text-gray-900">
-                      {ratio.value}
+                      {ratio.value.toFixed(2)}
                       {ratio.suffix}
                     </div>
                     <div className="text-sm text-gray-500">{ratio.desc}</div>
