@@ -207,7 +207,7 @@ const StockScreener = () => {
         data3.forEach((row) => {
           const kode = row["Code"]; // Header di CSV adalah "Code"
           const price = toNumber(row["Last"]); // Ambil nilai harga dari kolom "Last"
-          if (kode) {
+          if (kode && !priceMap.has(kode)) {
             priceMap.set(kode, { Price: price });
           }
         });
@@ -539,17 +539,23 @@ const StockScreener = () => {
                           <div className="flex items-center space-x-2">
                             {/* Logo di kiri */}
                             {r["Kode Saham"] && (
-                              <Link to={`/stock/${r["Kode Saham"].toLowerCase()}`} className="flex items-center space-x-2">
-                              <img
-                                src={`/stock/${r["Kode Saham"]}.png`}
-                                alt={`${r["Kode Saham"]} logo`} // Deskripsi gambar
-                                className="object-contain w-5 h-5" // Ukuran gambar kecil
-                              />
+                              <Link
+                                to={`/stock/${r["Kode Saham"].toLowerCase()}`}
+                                className="flex items-center space-x-2"
+                              >
+                                <img
+                                  src={`/stock/${r["Kode Saham"]}.png`}
+                                  alt={`${r["Kode Saham"]} logo`} // Deskripsi gambar
+                                  className="object-contain w-5 h-5" // Ukuran gambar kecil
+                                />
                               </Link>
                             )}
                             {/* Kode saham di kanan */}
-                             <Link to={`/stock/${r["Kode Saham"].toLowerCase()}`} className="flex items-center space-x-2">
-                            <span>{r["Kode Saham"]}</span>
+                            <Link
+                              to={`/stock/${r["Kode Saham"].toLowerCase()}`}
+                              className="flex items-center space-x-2"
+                            >
+                              <span>{r["Kode Saham"]}</span>
                             </Link>
                           </div>
                         </td>
