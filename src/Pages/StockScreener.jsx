@@ -20,7 +20,7 @@ const COLUMNS = [
   { id: "Kode Saham", label: "Kode Saham", type: "text" },
   { id: "Price", label: "Price", type: "number" },
   { id: "Book Value", label: "Book Value", type: "number" },
-  { id: "Change", label: "Persentase", type: "percent", unit: " %" },
+  { id: "Change", label: "Percentage", type: "percent", unit: " %" },
   { id: "Volume", label: "Volume", type: "number" }, // Kolom baru
   { id: "Nilai", label: "Value", type: "number" }, // Kolom baru
   { id: "Kode Subindustri", label: "Kode Subindustri", type: "text" },
@@ -161,6 +161,7 @@ const StockScreener = () => {
 
   // Search untuk Ranking Section
   const [rankingSearch, setRankingSearch] = useState("");
+  const [allStockSearch, setStockSearch] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -407,9 +408,25 @@ const StockScreener = () => {
   };
 
   // Data yang ditampilkan di tabel utama, tergantung toggle "Hanya yang Lulus Syarat"
-  const displayed = useMemo(() => {
-    return showQualifiedOnly ? filtered.filter(qualifies) : filtered;
-  }, [filtered, showQualifiedOnly]);
+// Data yang ditampilkan di tabel utama, tergantung toggle dan search
+const displayed = useMemo(() => {
+  let result = showQualifiedOnly ? filtered.filter(qualifies) : filtered;
+  
+  // Filter berdasarkan search term
+  if (allStockSearch.trim()) {
+    result = result.filter(
+      (row) =>
+        row["Kode Saham"]
+          ?.toLowerCase()
+          .includes(allStockSearch.toLowerCase()) ||
+        row["Nama Perusahaan"]
+          ?.toLowerCase()
+          .includes(allStockSearch.toLowerCase())
+    );
+  }
+  
+  return result;
+}, [filtered, showQualifiedOnly, allStockSearch]);
 
   const totalPages = Math.max(1, Math.ceil(displayed.length / perPage));
   const currentSlice = useMemo(() => {
@@ -737,6 +754,32 @@ const StockScreener = () => {
           className="overflow-hidden bg-white rounded-lg shadow-sm"
         >
           <div className="overflow-x-auto">
+           <div className="mb-4 mt-4 flex items-center justify-start px-6">
+              <div className="relative max-w-md w-full">
+                <input
+                  type="text"
+                  placeholder="Cari kode saham atau nama perusahaan..."
+                  value={allStockSearch}
+                  onChange={(e) => setStockSearch(e.target.value)}
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg
+                    className="w-4 h-4 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
