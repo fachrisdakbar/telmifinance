@@ -19,6 +19,7 @@ const COLUMNS = [
   { id: "Nama Perusahaan", label: "Nama Perusahaan", type: "text" },
   { id: "Kode Saham", label: "Kode Saham", type: "text" },
   { id: "Price", label: "Price", type: "number" },
+  { id: "Book Value", label: "Book Value", type: "number" },
   { id: "Change", label: "Persentase", type: "percent", unit: " %" },
   { id: "Volume", label: "Volume", type: "number" }, // Kolom baru
   { id: "Nilai", label: "Value", type: "number" }, // Kolom baru
@@ -273,6 +274,19 @@ const StockScreener = () => {
               } else {
                 obj[c.id] = 0;
               }
+            } else if (c.id === "Book Value") {
+              // KALKULASI BOOK VALUE
+              const kode = r["Kode Saham"];
+              const priceInfo = priceMap.get(kode);
+              const price = priceInfo ? priceInfo["Price"] : 0;
+              const pbv = toNumber(r["PBV"]);
+
+              // Book Value = Price / PBV
+              if (pbv !== 0 && price !== 0) {
+                obj[c.id] = price / pbv;
+              } else {
+                obj[c.id] = 0;
+              }
             } else {
               const raw = r[c.id];
               if (c.type === "number" || c.type === "percent")
@@ -504,6 +518,9 @@ const StockScreener = () => {
                       Price
                     </th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                      Book Value
+                    </th>
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
                       Percentage
                     </th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
@@ -564,6 +581,9 @@ const StockScreener = () => {
                         </td>
                         <td className="px-4 py-2 text-sm">
                           {formatCell(r["Price"], "number")}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {formatCell(r["Book Value"], "number")}
                         </td>
                         <td className="px-4 py-2 text-sm">
                           <span
