@@ -10,6 +10,8 @@ import {
   Building,
   Eye,
   EyeOff,
+  ChartBarStacked,
+  CandlestickChartIcon,
 } from "lucide-react";
 import {
   LineChart,
@@ -26,6 +28,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  ComposedChart,
 } from "recharts";
 import * as XLSX from "xlsx";
 
@@ -340,11 +343,11 @@ const formatCurrency = (value) => {
   if (value >= 1000000000000) { // 1 Triliun
     return `${(value / 1000000000000).toFixed(1)}T`;
   } else if (value >= 1000000000) { // 1 Miliar
-    return `${(value / 1000000000).toFixed(1)}B`;
+    return `${(value / 1000000000).toFixed(1)}M`;
   } else if (value >= 1000000) { // 1 Juta
-    return `${(value / 1000000).toFixed(1)}M`;
+    return `${(value / 1000000).toFixed(1)}Jt`;
   } else if (value >= 1000) { // 1 Ribu
-    return `${(value / 1000).toFixed(1)}K`;
+    return `${(value / 1000).toFixed(1)}Rb`;
   }
   return value.toFixed(1); // Untuk angka yang lebih kecil dari 1000
 };
@@ -371,6 +374,114 @@ const formatCurrency = (value) => {
   const handleBackClick = () => {
     navigate("/");
   };
+
+
+  const generateCandlestickData = () => {
+  const data = [];
+  const startDate = new Date('2025-06-01');
+  
+  // Generate 30 hari agar lebih terlihat
+  for (let i = 0; i < 30; i++) {
+    const base = 1000 + Math.sin(i / 3) * 50;
+    const volatility = 30;
+    
+    const open = base + (Math.random() - 0.5) * volatility;
+    const close = base + (Math.random() - 0.5) * volatility;
+    
+    // Pastikan high lebih tinggi dari max(open, close)
+    // Dan low lebih rendah dari min(open, close)
+    const high = Math.max(open, close) + Math.random() * 20 + 10;
+    const low = Math.min(open, close) - Math.random() * 20 - 10;
+    
+    data.push({
+      date: new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000)
+        .toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+      open: Math.round(open),
+      high: Math.round(high),
+      low: Math.round(low),
+      close: Math.round(close),
+      volume: Math.round((10 + Math.random() * 50) * 1000000),
+    });
+  }
+
+  return data;
+};
+
+ const Candlestick = (props) => {
+  const { x, y, width, height, payload } = props;
+  const { open, close, high, low } = payload;
+  
+  if (!open || !close || !high || !low) return null;
+  
+  const isGreen = close >= open;
+  const color = isGreen ? '#22c55e' : '#ef4444';
+  
+  // PENTING: Nilai ini HARUS SAMA dengan domain di YAxis
+  const minPrice = 900;
+  const maxPrice = 1100;
+  const yScale = height / (maxPrice - minPrice);
+  
+  const candleWidth = Math.min(width * 0.6, 12);
+  const xCenter = x + width / 2;
+  
+  // Konversi harga ke koordinat pixel
+  const yHigh = y + height - (high - minPrice) * yScale;
+  const yLow = y + height - (low - minPrice) * yScale;
+  const yOpen = y + height - (open - minPrice) * yScale;
+  const yClose = y + height - (close - minPrice) * yScale;
+  const bodyHeight = Math.abs(yClose - yOpen);
+  
+  return (
+    <g>
+      {/* Sumbu/Wick */}
+      <line
+        x1={xCenter}
+        y1={yHigh}
+        x2={xCenter}
+        y2={yLow}
+        stroke={color}
+        strokeWidth={1.5}
+      />
+      {/* Badan Candle */}
+      <rect
+        x={xCenter - candleWidth / 2}
+        y={Math.min(yOpen, yClose)}
+        width={candleWidth}
+        height={Math.max(bodyHeight, 1)}
+        fill={color}
+        stroke={color}
+        strokeWidth={1}
+      />
+    </g>
+  );
+};
+
+
+// Custom Tooltip (opsional, tapi recommended)
+const CandlestickTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length > 0) {
+    const data = payload[0].payload;
+    const change = data.close - data.open;
+    const changePercent = ((change / data.open) * 100).toFixed(2);
+    
+    return (
+      <div className="bg-white text-gray-800 p-3 border border-gray-300 rounded shadow-lg text-xs">
+        <p className="font-bold mb-2">{data.date}</p>
+        <div className="space-y-1">
+          <p>Open: <span className="font-semibold">{data.open?.toLocaleString()}</span></p>
+          <p>High: <span className="font-semibold">{data.high?.toLocaleString()}</span></p>
+          <p>Low: <span className="font-semibold">{data.low?.toLocaleString()}</span></p>
+          <p>Close: <span className="font-semibold">{data.close?.toLocaleString()}</span></p>
+          <p className={change >= 0 ? 'text-green-600' : 'text-red-600'}>
+            {change > 0 ? '+' : ''}{change} ({changePercent}%)
+          </p>
+          <p className="text-gray-600">Vol: {(data.volume / 1000000).toFixed(1)}M</p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 
   return (
@@ -450,33 +561,74 @@ const formatCurrency = (value) => {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="mb-8">
-          <div className="border-b border-gray-200">
-            <nav className="flex -mb-px space-x-8">
-              {[
-                { id: "overview", name: "Overview", icon: BarChart3 },
-                { id: "financial", name: "Laporan Keuangan", icon: DollarSign },
-                { id: "ratios", name: "Rasio Keuangan", icon: TrendingUp },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center px-4 py-4 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === tab.id
-                      ? "border-blue-500 text-blue-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  <tab.icon className="w-4 h-4 mr-2" />
-                  {tab.name}
-                </button>
-              ))}
-            </nav>
-          </div>
-        </div>
+       {/* Tabs */}
+<div className="mb-8">
+  <div className="border-b border-gray-200">
+    <nav className="flex -mb-px space-x-8">
+      {[
+        { id: "overview", name: "Overview", icon: BarChart3 },
+        { id: "charts", name: "Charts", icon: CandlestickChartIcon },
+        { id: "financial", name: "Laporan Keuangan", icon: DollarSign },
+        { id: "ratios", name: "Rasio Keuangan", icon: TrendingUp },
+      ].map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => setActiveTab(tab.id)}
+          className={`flex items-center px-4 py-4 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === tab.id
+              ? "border-blue-500 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          }`}
+        >
+          <tab.icon className="w-4 h-4 mr-2" />
+          {tab.name}
+        </button>
+      ))}
+    </nav>
+  </div>
+</div>
+
 
         {/* Content */}
+
+        {activeTab === "charts" && (
+  <div className="space-y-8">
+    {/* Candlestick Chart */}
+    <div className="p-6 bg-white shadow-lg rounded-xl">
+      <h3 className="mb-6 text-xl font-semibold text-gray-900">Candlestick Chart</h3>
+      <ResponsiveContainer width="100%" height={400}>
+        <ComposedChart data={generateCandlestickData()}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis 
+            dataKey="date" 
+            tick={{ fontSize: 10 }}
+          />
+          <YAxis 
+            domain={[900, 1100]}  // ← PASTIKAN INI SESUAI
+            tick={{ fontSize: 11 }}
+          />
+          <Tooltip content={<CandlestickTooltip />} />
+          <Bar dataKey="high" shape={<Candlestick />} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+
+    {/* Opsional: Volume Chart */}
+    <div className="p-6 bg-white shadow-lg rounded-xl">
+      <h3 className="mb-6 text-xl font-semibold text-gray-900">Volume</h3>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={generateCandlestickData()}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis dataKey="date" />
+          <YAxis tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`} />
+          <Tooltip formatter={(value) => [`${(value / 1000000).toFixed(2)}M`, 'Volume']} />
+          <Bar dataKey="volume" fill="#3b82f6" opacity={0.7} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+)}
+
         {activeTab === "overview" && (
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
             {/* Revenue vs Profit Chart */}

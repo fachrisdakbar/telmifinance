@@ -6,6 +6,7 @@ import BandarmologiPage from './Pages/BandarmologiPage';
 import StockRankVolume from './Pages/StockRankVolume';
 import Stocks from './Pages/admin/stock/Stocks';
 import StockDetailPage from './Pages/stockdetail/StockDetailPage';
+import CandlestickChart from './Pages/stockdetail/CandleStickChart';
 
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
       <Route path="/stockrankvolume" element={<StockRankVolume />} />
       <Route path="/stocks" element={<Stocks />} />
       <Route path="/stock/:stockCode" element={<StockDetailPage />} />
+      <Route path="/charts" element={<CandlestickChart />} />
     </Routes>
   );
 }
