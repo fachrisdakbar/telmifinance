@@ -19,7 +19,7 @@ const COLUMNS = [
   { id: "Nama Perusahaan", label: "Nama Perusahaan", type: "text" },
   { id: "Kode Saham", label: "Kode Saham", type: "text" },
   { id: "Price", label: "Price", type: "number" },
-  // { id: "Book Value", label: "Book Value", type: "number" },
+  { id: "Book Value", label: "Book Value", type: "number" },
   { id: "Change", label: "Percentage", type: "percent", unit: " %" },
   { id: "Volume", label: "Volume", type: "number" }, // Kolom baru
   { id: "Nilai", label: "Value", type: "number" }, // Kolom baru
@@ -192,6 +192,14 @@ const StockScreener = () => {
           throw new Error("Gagal memuat file change percentage CSV");
         const csvText = await res3.text();
 
+        // Load equity data
+        const res4 = await fetch("/data/equity.xlsx");
+        if (!res4.ok) throw new Error("Gagal memuat file equity XLSX");
+        const buf4 = await res4.arrayBuffer();
+        const wb4 = XLSX.read(buf4, { type: "array" });
+        const ws4 = wb4.Sheets[wb4.SheetNames[0]];
+        const data4 = XLSX.utils.sheet_to_json(ws4, { defval: "" });
+
         // Parse CSV menggunakan PapaParse
         const parseResult = await new Promise((resolve, reject) => {
           Papa.parse(csvText, {
@@ -223,10 +231,28 @@ const StockScreener = () => {
             volumeMap.set(kode, {
               Volume: toNumber(row["Volume"]),
               Nilai: toNumber(row["Nilai"]),
+              TradeableShares: toNumber(row["Tradeble Shares"]),
             });
           }
         });
         setVolumeData(volumeMap);
+        const currentYear = new Date().getFullYear(); // Tahun sekarang (misalnya 2025)
+        const prevYear = currentYear - 1; // Ambil tahun sebelumnya (misalnya 2024)
+
+        const equityMap = new Map();
+
+        data4.forEach((row) => {
+          const kode = row["Kode Saham"];
+          if (kode && row[prevYear.toString()]) {
+            // Ambil data dari tahun sebelumnya
+            // Menyimpan data Equity dari tahun sebelumnya
+            equityMap.set(kode, {
+              Equity: toNumber(row["2024"]), // Ambil nilai Equity dari tahun sebelumnya
+            });
+          }
+        });
+
+        // console.log("Equity Map:", equityMap);
 
         // Buat Map untuk data change percentage berdasarkan code
         const changeMap = new Map();
@@ -275,19 +301,28 @@ const StockScreener = () => {
               } else {
                 obj[c.id] = 0;
               }
-            // } else if (c.id === "Book Value") {
-            //   // KALKULASI BOOK VALUE
-            //   const kode = r["Kode Saham"];
-            //   const priceInfo = priceMap.get(kode);
-            //   const price = priceInfo ? priceInfo["Price"] : 0;
-            //   const pbv = toNumber(r["PBV"]);
+            } else if (c.id === "Book Value") {
+              // KALKULASI BOOK VALUE
+              const kode = r["Kode Saham"];
+              const volumeInfo = volumeMap.get(kode);
+              const equityInfo = equityMap.get(kode);
 
-            //   // Book Value = Price / PBV
-            //   if (pbv !== 0 && price !== 0) {
-            //     obj[c.id] = price / pbv;
-            //   } else {
-            //     obj[c.id] = 0;
-            //   }
+              // console.log("Kode Saham:", kode);
+              // console.log("Equity Info:", equityInfo);
+              // console.log("Volume Info:", volumeInfo);
+              // if (!equityInfo || !volumeInfo) {
+              //   console.log(`Data tidak ditemukan untuk Kode Saham: ${kode}`);
+              // }
+              const tradeableShares = volumeInfo
+                ? volumeInfo.TradeableShares
+                : 0;
+              const equity = equityInfo ? equityInfo.Equity : 0;
+
+              if (tradeableShares !== 0 && equity !== 0) {
+                obj[c.id] = equity / tradeableShares;
+              } else {
+                obj[c.id] = 0;
+              }
             } else {
               const raw = r[c.id];
               if (c.type === "number" || c.type === "percent")
@@ -408,25 +443,25 @@ const StockScreener = () => {
   };
 
   // Data yang ditampilkan di tabel utama, tergantung toggle "Hanya yang Lulus Syarat"
-// Data yang ditampilkan di tabel utama, tergantung toggle dan search
-const displayed = useMemo(() => {
-  let result = showQualifiedOnly ? filtered.filter(qualifies) : filtered;
-  
-  // Filter berdasarkan search term
-  if (allStockSearch.trim()) {
-    result = result.filter(
-      (row) =>
-        row["Kode Saham"]
-          ?.toLowerCase()
-          .includes(allStockSearch.toLowerCase()) ||
-        row["Nama Perusahaan"]
-          ?.toLowerCase()
-          .includes(allStockSearch.toLowerCase())
-    );
-  }
-  
-  return result;
-}, [filtered, showQualifiedOnly, allStockSearch]);
+  // Data yang ditampilkan di tabel utama, tergantung toggle dan search
+  const displayed = useMemo(() => {
+    let result = showQualifiedOnly ? filtered.filter(qualifies) : filtered;
+
+    // Filter berdasarkan search term
+    if (allStockSearch.trim()) {
+      result = result.filter(
+        (row) =>
+          row["Kode Saham"]
+            ?.toLowerCase()
+            .includes(allStockSearch.toLowerCase()) ||
+          row["Nama Perusahaan"]
+            ?.toLowerCase()
+            .includes(allStockSearch.toLowerCase())
+      );
+    }
+
+    return result;
+  }, [filtered, showQualifiedOnly, allStockSearch]);
 
   const totalPages = Math.max(1, Math.ceil(displayed.length / perPage));
   const currentSlice = useMemo(() => {
@@ -534,9 +569,9 @@ const displayed = useMemo(() => {
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
                       Price
                     </th>
-                    {/* <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
+                    <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
                       Book Value
-                    </th> */}
+                    </th>
                     <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">
                       Percentage
                     </th>
@@ -599,9 +634,9 @@ const displayed = useMemo(() => {
                         <td className="px-4 py-2 text-sm">
                           {formatCell(r["Price"], "number")}
                         </td>
-                        {/* <td className="px-4 py-2 text-sm">
+                        <td className="px-4 py-2 text-sm">
                           {formatCell(r["Book Value"], "number")}
-                        </td> */}
+                        </td>
                         <td className="px-4 py-2 text-sm">
                           <span
                             className={`${
@@ -754,7 +789,7 @@ const displayed = useMemo(() => {
           className="overflow-hidden bg-white rounded-lg shadow-sm"
         >
           <div className="overflow-x-auto">
-           <div className="mb-4 mt-4 flex items-center justify-start px-6">
+            <div className="mb-4 mt-4 flex items-center justify-start px-6">
               <div className="relative max-w-md w-full">
                 <input
                   type="text"

@@ -145,8 +145,8 @@ const CandlestickChart = () => {
       const changePercent = ((change / data.open) * 100).toFixed(2);
       
       return (
-        <div className="bg-white text-gray-800 p-3 border border-gray-300 rounded shadow-lg text-xs">
-          <p className="font-bold mb-2">{data.date}</p>
+        <div className="p-3 text-xs text-gray-800 bg-white border border-gray-300 rounded shadow-lg">
+          <p className="mb-2 font-bold">{data.date}</p>
           <div className="space-y-1">
             <p>O: <span className="font-semibold">{data.open?.toLocaleString()}</span></p>
             <p>H: <span className="font-semibold">{data.high?.toLocaleString()}</span></p>
@@ -167,17 +167,17 @@ const CandlestickChart = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="w-full min-h-screen p-4 bg-gray-50">
+      <div className="mx-auto max-w-7xl">
         {/* Header */}
-        <div className="bg-white rounded-lg p-4 mb-4 border border-gray-200 shadow">
+        <div className="p-4 mb-4 bg-white border border-gray-200 rounded-lg shadow">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800 mb-1">
+              <h1 className="mb-1 text-2xl font-bold text-gray-800">
                 AADI - Adaro Andalan Indonesia Tbk.
               </h1>
               <div className="flex items-center gap-4 text-sm">
-                <span className="text-gray-600">Last: <span className="text-gray-900 font-semibold">{lastData.close?.toLocaleString()}</span></span>
+                <span className="text-gray-600">Last: <span className="font-semibold text-gray-900">{lastData.close?.toLocaleString()}</span></span>
                 <span className={change >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
                   {change > 0 ? '▲' : '▼'} {Math.abs(change)} ({changePercent}%)
                 </span>
@@ -202,8 +202,8 @@ const CandlestickChart = () => {
         </div>
 
         {/* Price Chart */}
-        <div className="bg-white rounded-lg p-4 mb-2 border border-gray-200 shadow">
-          <div className="text-xs text-gray-600 mb-2">Candle Stick</div>
+        <div className="p-4 mb-2 bg-white border border-gray-200 rounded-lg shadow">
+          <div className="mb-2 text-xs text-gray-600">Candle Stick</div>
           <ResponsiveContainer width="100%" height={400}>
             <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -233,8 +233,8 @@ const CandlestickChart = () => {
         </div>
 
         {/* Volume Chart */}
-        <div className="bg-white rounded-lg p-4 border border-gray-200 shadow">
-          <div className="text-xs text-gray-600 mb-2">Volume</div>
+        <div className="p-4 bg-white border border-gray-200 rounded-lg shadow">
+          <div className="mb-2 text-xs text-gray-600">Volume</div>
           <ResponsiveContainer width="100%" height={150}>
             <BarChart data={data} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -265,7 +265,7 @@ const CandlestickChart = () => {
         </div>
 
         {/* Legend */}
-        <div className="mt-4 flex items-center justify-center gap-6 text-sm">
+        <div className="flex items-center justify-center gap-6 mt-4 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-blue-500 rounded"></div>
             <span className="text-gray-400">Bullish</span>
