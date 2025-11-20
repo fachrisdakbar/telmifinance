@@ -214,11 +214,15 @@ const StockScreener = () => {
         const data3 = parseResult.data;
 
         const priceMap = new Map();
-        data3.forEach((row) => {
-          const kode = row["Code"]; // Header di CSV adalah "Code"
-          const price = toNumber(row["Last"]); // Ambil nilai harga dari kolom "Last"
-          if (kode && !priceMap.has(kode)) {
-            priceMap.set(kode, { Price: price });
+        data2.forEach((row) => {
+          const kode = row["Kode Saham"];
+          const closePrice = toNumber(row["Penutupan"]); // atau row["Close"]
+
+          if (kode) {
+            // Jika belum ada di priceMap → isi dengan harga penutupan
+            if (!priceMap.has(kode)) {
+              priceMap.set(kode, { Price: closePrice });
+            }
           }
         });
         setChangeData(priceMap);
@@ -296,6 +300,7 @@ const StockScreener = () => {
               // Ambil data harga dari priceMap berdasarkan Kode Saham
               const kode = r["Kode Saham"];
               const priceInfo = priceMap.get(kode);
+              console.log("Price info for", kode, ":", priceInfo);
               if (priceInfo) {
                 obj[c.id] = priceInfo["Price"] || 0;
               } else {
