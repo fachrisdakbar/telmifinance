@@ -20,13 +20,14 @@ const Navbar = () => {
           </div>
 
           <div className="flex items-center space-x-8 font-medium">
+           <Link to="/brokerkalkulator" className="text-grey-600 hover:underline">BROKER CALCULATOR</Link>
            <Link to="/bandarmologi" className="text-grey-600 hover:underline">BANDARMOLOGI</Link>
            <Link to="/stockrankvolume" className="text-grey-600 hover:underline">RANKING</Link>
             {/* <a href="#">SCREENS</a> */}
-            <div className="relative group">
+            {/* <div className="relative group">
               <button
                 type="button"
-                className="flex items-center focus:outline-none bg-transparent text-inherit"
+                className="flex items-center bg-transparent focus:outline-none text-inherit"
               >
                 ECONOMICS
                 <ChevronDown className="inline-block ml-2 -mt-1" size={16} />
@@ -34,18 +35,18 @@ const Navbar = () => {
               <div className="absolute left-0 hidden w-32 p-2 bg-white rounded-md shadow-lg top-8 group-hover:block">
                 <button
                   type="button"
-                  className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
+                  className="block w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
                 >
                   Tool 1
                 </button>
                 <button
                   type="button"
-                  className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
+                  className="block w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
                 >
                   Tool 2
                 </button>
               </div>
-            </div>
+            </div> */}
           </div>
 
           <div className="flex items-center space-x-2 border border-gray-300 rounded-lg px-4 py-1.5 w-96">

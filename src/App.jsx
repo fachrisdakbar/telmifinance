@@ -7,6 +7,7 @@ import StockRankVolume from './Pages/StockRankVolume';
 import Stocks from './Pages/admin/stock/Stocks';
 import StockDetailPage from './Pages/stockdetail/StockDetailPage';
 import CandlestickChart from './Pages/stockdetail/CandleStickChart';
+import BrokerAccumulator from './Pages/calculator/BrokerAccumulator';
 
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
       <Route path="/stocks" element={<Stocks />} />
       <Route path="/stock/:stockCode" element={<StockDetailPage />} />
       <Route path="/charts" element={<CandlestickChart />} />
+      <Route path="/brokerkalkulator" element={<BrokerAccumulator />} />
     </Routes>
   );
 }
