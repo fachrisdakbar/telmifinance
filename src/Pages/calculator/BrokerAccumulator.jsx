@@ -918,11 +918,6 @@ export default function BrokerAccumulator() {
             </div>
           </div>
         )}
-
-        <div className="mt-10 text-xs text-gray-500">
-          FYI: Smartmoney overlap dengan grup lain. Jadi ranking antar group bisa “double-counted”. Itu emang definisi
-          grupnya, bukan React lu yang ngambek 😄
-        </div>
       </div>
     </div>
   );
