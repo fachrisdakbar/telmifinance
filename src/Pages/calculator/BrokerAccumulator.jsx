@@ -1,35 +1,54 @@
-import React, { useState, useMemo } from "react";
-import { read, utils } from 'xlsx';
-import {
-  Upload,
-  TrendingUp,
-  TrendingDown,
-  FileSpreadsheet,
-} from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { read, utils } from "xlsx";
+import { Upload, TrendingUp, TrendingDown, FileSpreadsheet } from "lucide-react";
 
-// Custom Sankey Chart Component
+/** =========================
+ * Broker Groups + Colors
+ * ========================= */
 const BROKER_GROUPS = {
   "Bandar Asing": ["AK", "BK", "RX"],
   Foreign: ["ZP", "YU", "KZ"],
-  "Bandar Lokal": ["BB", "RF", "KI"],
-  Zombie: ["SS", "PP", "IN"],
-  Smartmoney: ["AK", "BK", "YU","BB","AI"],
-  Ritel: ["YP", "XC", "XL", "PD","KK"],
+  "Bandar Lokal": ["BB", "RF", "KI", "MG","LG"],
+  Zombie: ["SS", "PP", "IN", "PG", "FZ"],
+  Smartmoney: ["RF", "AK", "BK", "BB", "DX", "ZP", "HP", "KZ", "RX"],
+  Ritel: ["YP", "XC", "XL", "PD", "KK", "CP", "AZ"],
+  BUMN: ["CC"],
 };
 
-// Warna per group (bebas ubah)
 const GROUP_COLORS = {
-  "Bandar Asing": "#f59e0b", // amber
-  Foreign: "#ef4444", // red
-  "Bandar Lokal": "#a855f7", // purple
-  Zombie: "#6b7280", // gray
-  Smartmoney: "#F447D1", // gray
-  Ritel: "#38bdf8", // sky
-  Unknown: "#22c55e", // green fallback
+  "Bandar Asing": "#f59e0b",
+  Foreign: "#ef4444",
+  "Bandar Lokal": "#a855f7",
+  Zombie: "#6b7280",
+  Smartmoney: "#F447D1",
+  Ritel: "#38bdf8",
+  BUMN: "#ffff00",
+  Unknown: "#22c55e",
 };
 
 const norm = (v) => String(v ?? "").toUpperCase().trim();
 
+/** broker -> [groups] (supports overlap) */
+const BROKER_TO_GROUPS = (() => {
+  const map = {};
+  for (const [group, codes] of Object.entries(BROKER_GROUPS)) {
+    for (const c of codes) {
+      const code = norm(c);
+      (map[code] ||= []).push(group);
+    }
+  }
+  for (const k of Object.keys(map)) map[k] = [...new Set(map[k])];
+  return map;
+})();
+
+const getGroupsForBroker = (broker) => {
+  const code = norm(broker);
+  return BROKER_TO_GROUPS[code] || ["Unknown"];
+};
+
+/** =========================
+ * Sankey Chart (with group filter)
+ * ========================= */
 const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
   const getBrokerGroup = (broker) => {
     const code = norm(broker);
@@ -44,7 +63,7 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
     return GROUP_COLORS[group] || GROUP_COLORS.Unknown;
   };
 
-  const formatValue = (num) => {
+  const formatMini = (num) => {
     const n = Number(num || 0);
     const abs = Math.abs(n);
     if (abs >= 1e9) return (n / 1e9).toFixed(2) + " B";
@@ -53,14 +72,10 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
     return n.toFixed(2);
   };
 
-  /** =========================
-   * 2) Filter state: klik "span" legend buat filter group
-   * ========================= */
   const [activeGroup, setActiveGroup] = useState(null); // null = All
 
   const { filteredBuy, filteredSell } = useMemo(() => {
     if (!activeGroup) return { filteredBuy: buyData, filteredSell: sellData };
-
     const allowed = new Set(BROKER_GROUPS[activeGroup] || []);
     return {
       filteredBuy: (buyData || []).filter((x) => allowed.has(norm(x?.broker))),
@@ -68,13 +83,9 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
     };
   }, [buyData, sellData, activeGroup]);
 
-  // Top nodes (sesuai kode awal kamu)
   const topBuyers = (filteredBuy || []).slice(0, 7);
   const topSellers = (filteredSell || []).slice(0, 7);
 
-  /** =========================
-   * 3) Layout constants
-   * ========================= */
   const chartHeight = 600;
   const margin = { top: 80, right: 140, bottom: 60, left: 140 };
   const nodeWidth = 20;
@@ -82,21 +93,17 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
   const width = 1000;
   const innerHeight = chartHeight - margin.top - margin.bottom;
 
-  /** =========================
-   * 4) Totals + safety guards
-   * ========================= */
   const totalBuyValue = topBuyers.reduce(
     (sum, b) => sum + (mode === "value" ? Number(b?.value || 0) : Number(b?.volume || 0)),
     0
   );
 
   const totalSellValue = topSellers.reduce(
-    (sum, s) =>
-      sum + Math.abs(mode === "value" ? Number(s?.value || 0) : Number(s?.volume || 0)),
+    (sum, s) => sum + Math.abs(mode === "value" ? Number(s?.value || 0) : Number(s?.volume || 0)),
     0
   );
 
-  const maxTotal = Math.max(totalBuyValue, totalSellValue, 1); // prevent 0 -> NaN
+  const maxTotal = Math.max(totalBuyValue, totalSellValue, 1);
   const noData = topBuyers.length === 0 || topSellers.length === 0;
 
   const clickableSpanBase =
@@ -113,16 +120,12 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
 
   return (
     <div className="w-full p-6 overflow-x-auto shadow-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl">
-      {/* Info Filter */}
       <div className="flex items-center justify-between mb-4">
         <div className="text-sm text-gray-300">
           Filter:{" "}
-          <span className="font-semibold text-gray-100">
-            {activeGroup ? activeGroup : "All"}
-          </span>
+          <span className="font-semibold text-gray-100">{activeGroup ? activeGroup : "All"}</span>
         </div>
 
-        {/* Quick clear */}
         {activeGroup && (
           <button
             type="button"
@@ -141,13 +144,11 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
       ) : (
         <svg width={width} height={chartHeight} className="mx-auto">
           <defs>
-            {/* Gradients per pair */}
             {topBuyers.map((buyer, i) =>
               topSellers.map((seller, j) => {
                 const id = `gradient-${i}-${j}`;
                 const buyColor = getBrokerColor(buyer?.broker);
                 const sellColor = getBrokerColor(seller?.broker);
-
                 return (
                   <linearGradient key={id} id={id} x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor={buyColor} stopOpacity="0.7" />
@@ -158,7 +159,6 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
               })
             )}
 
-            {/* Glow effect */}
             <filter id="glow">
               <feGaussianBlur stdDeviation="3" result="coloredBlur" />
               <feMerge>
@@ -167,7 +167,6 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
               </feMerge>
             </filter>
 
-            {/* Background grid */}
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
               <path
                 d="M 40 0 L 0 0 0 40"
@@ -180,8 +179,6 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
 
           <rect width={width} height={chartHeight} fill="url(#grid)" />
 
-
-          {/* Labels */}
           <text
             x={margin.left - 20}
             y={margin.top - 30}
@@ -201,20 +198,17 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
             Seller
           </text>
 
-          {/* Main render */}
           {(() => {
-            // Buyer positions
             let currentBuyY = margin.top;
             const buyerPositions = topBuyers.map((buyer) => {
               const value = mode === "value" ? Number(buyer?.value || 0) : Number(buyer?.volume || 0);
               const height = (value / maxTotal) * innerHeight * 0.9;
-              const safeHeight = Math.max(height, 8); // avoid ultra-thin nodes
+              const safeHeight = Math.max(height, 8);
               const pos = { y: currentBuyY, height: safeHeight, value };
               currentBuyY += safeHeight + nodePadding;
               return pos;
             });
 
-            // Seller positions
             let currentSellY = margin.top;
             const sellerPositions = topSellers.map((seller) => {
               const value = Math.abs(
@@ -244,7 +238,6 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
                       mode === "value" ? Number(seller?.value || 0) : Number(seller?.volume || 0)
                     );
 
-                    // Flow height (simple proportional)
                     const flowRatio =
                       Math.min(buyerValue / safeTotalBuy, sellerValue / safeTotalSell) / topSellers.length;
 
@@ -278,21 +271,12 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
                 {/* Buyer nodes */}
                 {topBuyers.map((buyer, idx) => {
                   const pos = buyerPositions[idx];
-                  const value =
-                    mode === "value" ? Number(buyer?.value || 0) : Number(buyer?.volume || 0);
+                  const value = mode === "value" ? Number(buyer?.value || 0) : Number(buyer?.volume || 0);
                   const color = getBrokerColor(buyer?.broker);
 
                   return (
                     <g key={`buyer-${idx}`} style={{ filter: "url(#glow)" }}>
-                      <rect
-                        x={margin.left - 45}
-                        y={pos.y}
-                        width={10}
-                        height={pos.height}
-                        fill={color}
-                        rx="5"
-                        opacity="0.8"
-                      />
+                      <rect x={margin.left - 45} y={pos.y} width={10} height={pos.height} fill={color} rx="5" opacity="0.8" />
 
                       <rect
                         x={margin.left}
@@ -311,7 +295,6 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
                         textAnchor="end"
                         dominantBaseline="middle"
                         className="text-lg font-bold fill-gray-100"
-                        style={{ textShadow: "2px 2px 4px rgba(0,0,0,0.8)" }}
                       >
                         {buyer?.broker}
                       </text>
@@ -323,7 +306,7 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
                         dominantBaseline="middle"
                         className="text-sm font-medium fill-gray-400"
                       >
-                        {formatValue(value)}
+                        {formatMini(value)}
                       </text>
                     </g>
                   );
@@ -350,15 +333,7 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
                         rx="3"
                       />
 
-                      <rect
-                        x={width - margin.right + 35}
-                        y={pos.y}
-                        width={10}
-                        height={pos.height}
-                        fill={color}
-                        rx="5"
-                        opacity="0.8"
-                      />
+                      <rect x={width - margin.right + 35} y={pos.y} width={10} height={pos.height} fill={color} rx="5" opacity="0.8" />
 
                       <text
                         x={width - margin.right + 55}
@@ -366,7 +341,6 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
                         textAnchor="start"
                         dominantBaseline="middle"
                         className="text-lg font-bold fill-gray-100"
-                        style={{ textShadow: "2px 2px 4px rgba(0,0,0,0.8)" }}
                       >
                         {seller?.broker}
                       </text>
@@ -378,7 +352,7 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
                         dominantBaseline="middle"
                         className="text-sm font-medium fill-gray-400"
                       >
-                        {formatValue(value)}
+                        {formatMini(value)}
                       </text>
                     </g>
                   );
@@ -389,45 +363,35 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
         </svg>
       )}
 
-      {/* === Legend Filter "SPAN" (klik spannya untuk filter group) === */}
+      {/* Legend */}
       <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
-        {/* All */}
         <span
           {...makeSpanA11y(() => setActiveGroup(null))}
-          className={`${clickableSpanBase}
-            ${
-              !activeGroup
-                ? "bg-indigo-500/20 border-indigo-400 text-indigo-200"
-                : "bg-gray-800 border-gray-700 text-gray-200 hover:border-gray-500"
-            }`}
+          className={`${clickableSpanBase} ${
+            !activeGroup
+              ? "bg-indigo-500/20 border-indigo-400 text-indigo-200"
+              : "bg-gray-800 border-gray-700 text-gray-200 hover:border-gray-500"
+          }`}
           title="Tampilkan semua broker"
         >
           All
         </span>
 
-        {/* Groups */}
         {Object.keys(BROKER_GROUPS).map((group) => {
           const isActive = activeGroup === group;
           const color = GROUP_COLORS[group] || GROUP_COLORS.Unknown;
-
           const toggle = () => setActiveGroup((prev) => (prev === group ? null : group));
 
           return (
             <span
               key={group}
               {...makeSpanA11y(toggle)}
-              className={`${clickableSpanBase}
-                ${
-                  isActive
-                    ? "bg-gray-700 border-gray-400"
-                    : "bg-gray-800 border-gray-700 hover:border-gray-500"
-                }`}
+              className={`${clickableSpanBase} ${
+                isActive ? "bg-gray-700 border-gray-400" : "bg-gray-800 border-gray-700 hover:border-gray-500"
+              }`}
               title={`Filter: ${group} (${BROKER_GROUPS[group].join(", ")})`}
             >
-              <span
-                className="w-5 h-5 rounded-md"
-                style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}80` }}
-              />
+              <span className="w-5 h-5 rounded-md" style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}80` }} />
               <span className="text-sm font-semibold text-gray-200">
                 ● {group}
                 <span className="font-medium text-gray-400"> ({BROKER_GROUPS[group].join(", ")})</span>
@@ -440,7 +404,195 @@ const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
   );
 };
 
+/** =========================
+ * Group Aggregation + ranking fields
+ * ========================= */
+const buildGroupAggregation = (buyArr = [], sellArr = []) => {
+  const acc = new Map();
 
+  const ensure = (group) => {
+    if (!acc.has(group)) {
+      acc.set(group, {
+        group,
+        color: GROUP_COLORS[group] || GROUP_COLORS.Unknown,
+        buyVolume: 0,
+        buyValue: 0,
+        sellVolume: 0,
+        sellValue: 0,
+        totalVolume: 0,
+        totalValue: 0,
+        netVolume: 0,
+        netValue: 0,
+      });
+    }
+    return acc.get(group);
+  };
+
+  // Keep stable order / existence
+  Object.keys(BROKER_GROUPS).forEach(ensure);
+
+  const add = (item, side) => {
+    const vol = Number(item?.volume || 0);
+    const val = Number(item?.value || 0);
+
+    const groups = getGroupsForBroker(item?.broker);
+    for (const g of groups) {
+      const row = ensure(g);
+      if (side === "buy") {
+        row.buyVolume += vol;
+        row.buyValue += val;
+      } else {
+        // sell -> absolute for readability
+        row.sellVolume += Math.abs(vol);
+        row.sellValue += Math.abs(val);
+      }
+    }
+  };
+
+  buyArr.forEach((x) => add(x, "buy"));
+  sellArr.forEach((x) => add(x, "sell"));
+
+  const out = Array.from(acc.values())
+    .map((r) => {
+      const totalVolume = r.buyVolume + r.sellVolume;
+      const totalValue = r.buyValue + r.sellValue;
+      const netVolume = r.buyVolume - r.sellVolume;
+      const netValue = r.buyValue - r.sellValue;
+      return { ...r, totalVolume, totalValue, netVolume, netValue };
+    })
+    .filter((r) => r.totalValue || r.totalVolume);
+
+  // drop Unknown if truly empty (usually)
+  const unknown = out.find((x) => x.group === "Unknown");
+  if (unknown && unknown.totalValue === 0 && unknown.totalVolume === 0) {
+    return out.filter((x) => x.group !== "Unknown");
+  }
+
+  return out;
+};
+
+/** =========================
+ * Group Accumulation Chart (ranked high -> low)
+ * Ranking basis: totalValue / totalVolume (depends mode)
+ * ========================= */
+const GroupAccumulationChart = ({ data = [], mode = "value", formatValue, formatNumber }) => {
+  const buyKey = mode === "value" ? "buyValue" : "buyVolume";
+  const sellKey = mode === "value" ? "sellValue" : "sellVolume";
+  const totalKey = mode === "value" ? "totalValue" : "totalVolume";
+  const netKey = mode === "value" ? "netValue" : "netVolume";
+
+  const fmt = (n) => (mode === "value" ? formatValue(n) : formatNumber(n));
+
+  // scale bars by max TOTAL (biar visual konsisten antar-group)
+  const maxTotal = Math.max(1, ...data.map((d) => Number(d[totalKey] || 0)));
+
+  return (
+    <div className="p-6 bg-white shadow-xl rounded-2xl">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-gray-800">
+          Ranking Akumulasi Broker Group{" "}
+          <span className="text-sm font-medium text-gray-500">
+            ({mode === "value" ? "Value" : "Volume"})
+          </span>
+        </h2>
+
+        <div className="text-sm text-gray-500">
+          Skala (max total): <span className="font-semibold text-gray-700">{fmt(maxTotal)}</span>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {data.map((g, idx) => {
+          const buy = Number(g[buyKey] || 0);
+          const sell = Number(g[sellKey] || 0);
+          const total = Number(g[totalKey] || 0);
+          const net = Number(g[netKey] || 0);
+
+          const buyW = `${(buy / maxTotal) * 100}%`;
+          const sellW = `${(sell / maxTotal) * 100}%`;
+          const totalW = `${(total / maxTotal) * 100}%`;
+
+          return (
+            <div key={g.group} className="p-4 border border-gray-100 rounded-xl">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-10 text-xs font-bold text-gray-500">#{idx + 1}</span>
+                  <span className="w-3 h-3 rounded" style={{ backgroundColor: g.color }} />
+                  <div className="font-semibold text-gray-800">{g.group}</div>
+                </div>
+
+                <div className="text-xs text-right text-gray-500">
+                  Total: <span className="font-semibold text-gray-700">{fmt(total)}</span> · Net:{" "}
+                  <span className={`font-semibold ${net >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {net >= 0 ? "+" : "-"}
+                    {fmt(Math.abs(net))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Total Bar */}
+              <div className="flex items-center gap-3">
+                <div className="text-xs font-semibold text-indigo-600 w-14">TOTAL</div>
+                <div className="flex-1 h-3 overflow-hidden bg-gray-100 rounded-full">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: totalW,
+                      background: `linear-gradient(90deg, ${g.color}, rgba(79,70,229,0.9))`,
+                    }}
+                    title={`TOTAL ${g.group}: ${fmt(total)}`}
+                  />
+                </div>
+                <div className="text-xs font-semibold text-right text-gray-700 w-28">{fmt(total)}</div>
+              </div>
+
+              {/* Buy Bar */}
+              <div className="flex items-center gap-3 mt-2">
+                <div className="text-xs font-semibold text-green-600 w-14">BUY</div>
+                <div className="flex-1 h-3 overflow-hidden bg-gray-100 rounded-full">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: buyW,
+                      background: `linear-gradient(90deg, rgba(34,197,94,0.95), ${g.color})`,
+                    }}
+                    title={`BUY ${g.group}: ${fmt(buy)}`}
+                  />
+                </div>
+                <div className="text-xs text-right text-gray-600 w-28">{fmt(buy)}</div>
+              </div>
+
+              {/* Sell Bar */}
+              <div className="flex items-center gap-3 mt-2">
+                <div className="text-xs font-semibold text-red-600 w-14">SELL</div>
+                <div className="flex-1 h-3 overflow-hidden bg-gray-100 rounded-full">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: sellW,
+                      background: `linear-gradient(90deg, rgba(239,68,68,0.95), ${g.color})`,
+                    }}
+                    title={`SELL ${g.group}: ${fmt(sell)}`}
+                  />
+                </div>
+                <div className="text-xs text-right text-gray-600 w-28">{fmt(sell)}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-4 text-xs text-gray-500">
+        Note: karena group bisa overlap (Smartmoney nyomot broker dari grup lain), ranking total antar group bisa
+        double-counted. Itu expected, bukan bug.
+      </p>
+    </div>
+  );
+};
+
+/** =========================
+ * Main Page
+ * ========================= */
 export default function BrokerAccumulator() {
   const [files, setFiles] = useState([]);
   const [netBuyData, setNetBuyData] = useState([]);
@@ -449,26 +601,19 @@ export default function BrokerAccumulator() {
   const [chartMode, setChartMode] = useState("value");
 
   const handleFileUpload = async (e) => {
-    const uploadedFiles = Array.from(e.target.files);
+    const uploadedFiles = Array.from(e.target.files || []);
     const allData = [];
 
     for (const file of uploadedFiles) {
       const data = await file.arrayBuffer();
-      const workbook = read(data);
+      const workbook = read(data, { type: "array" });
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = utils.sheet_to_json(worksheet, {
-        header: 1,
-        defval: "",
-      });
+      const jsonData = utils.sheet_to_json(worksheet, { header: 1, defval: "" });
 
       const dateMatch = file.name.match(/(\d{2}-\d{2}-\d{4})/);
       const fileDate = dateMatch ? dateMatch[1] : "";
 
-      allData.push({
-        fileName: file.name,
-        date: fileDate,
-        data: jsonData,
-      });
+      allData.push({ fileName: file.name, date: fileDate, data: jsonData });
     }
 
     setFiles(allData);
@@ -487,37 +632,33 @@ export default function BrokerAccumulator() {
         const c1 = (row[i] || "").toString().trim().toLowerCase();
         const c2 = (row[i + 1] || "").toString().trim().toLowerCase();
         const c3 = (row[i + 2] || "").toString().trim().toLowerCase();
-
         if (c1 === "broker" && c2 === "volume" && c3 === "value") {
-          groups.push({
-            brokerCol: i,
-            volumeCol: i + 1,
-            valueCol: i + 2,
-          });
+          groups.push({ brokerCol: i, volumeCol: i + 1, valueCol: i + 2 });
         }
       }
       return groups;
     }
 
     filesData.forEach(({ date, data }) => {
-      const [day, month, year] = date.split("-");
-      const dateObj = new Date(`${year}-${month}-${day}`);
+      if (date) {
+        const [day, month, year] = date.split("-");
+        const dateObj = new Date(`${year}-${month}-${day}`);
+        if (!Number.isNaN(dateObj.getTime())) {
+          if (!minDate || dateObj < minDate) minDate = dateObj;
+          if (!maxDate || dateObj > maxDate) maxDate = dateObj;
+        }
+      }
 
-      if (!minDate || dateObj < minDate) minDate = dateObj;
-      if (!maxDate || dateObj > maxDate) maxDate = dateObj;
-
+      // find header row contains "net buy" and "net sell"
       let headerRow = -1;
       for (let i = 0; i < Math.min(10, data.length); i++) {
         const row = data[i];
-        const rowStr = row
-          .map((cell) => (cell || "").toString().toLowerCase())
-          .join("|");
+        const rowStr = row.map((cell) => (cell || "").toString().toLowerCase()).join("|");
         if (rowStr.includes("net buy") && rowStr.includes("net sell")) {
           headerRow = i;
           break;
         }
       }
-
       if (headerRow === -1) return;
 
       const header2 = data[headerRow + 1];
@@ -525,52 +666,42 @@ export default function BrokerAccumulator() {
 
       const groups = findBrokerGroups(header2);
 
+      // BUY block (table 1)
       if (groups.length >= 1) {
         const buyCols = groups[0];
-
         for (let i = headerRow + 2; i < data.length; i++) {
           const row = data[i];
-          const broker = (row[buyCols.brokerCol] || "").trim();
+          const broker = (row[buyCols.brokerCol] || "").toString().trim();
           if (!broker || broker.toLowerCase() === "broker") continue;
 
           const volume = parseFloat(row[buyCols.volumeCol]) || 0;
           const value = parseFloat(row[buyCols.valueCol]) || 0;
 
           if (volume > 0 && value > 0) {
-            if (!buyAccumulator[broker]) {
-              buyAccumulator[broker] = { volume: 0, value: 0, dates: [] };
-            }
+            if (!buyAccumulator[broker]) buyAccumulator[broker] = { volume: 0, value: 0, dates: [] };
             buyAccumulator[broker].volume += volume;
             buyAccumulator[broker].value += value;
-
-            if (!buyAccumulator[broker].dates.includes(date)) {
-              buyAccumulator[broker].dates.push(date);
-            }
+            if (date && !buyAccumulator[broker].dates.includes(date)) buyAccumulator[broker].dates.push(date);
           }
         }
       }
 
+      // SELL block (table 2)
       if (groups.length >= 2) {
         const sellCols = groups[1];
-
         for (let i = headerRow + 2; i < data.length; i++) {
           const row = data[i];
-          const broker = (row[sellCols.brokerCol] || "").trim();
+          const broker = (row[sellCols.brokerCol] || "").toString().trim();
           if (!broker || broker.toLowerCase() === "broker") continue;
 
           const volume = parseFloat(row[sellCols.volumeCol]) || 0;
           const value = parseFloat(row[sellCols.valueCol]) || 0;
 
           if (volume !== 0 && value !== 0) {
-            if (!sellAccumulator[broker]) {
-              sellAccumulator[broker] = { volume: 0, value: 0, dates: [] };
-            }
+            if (!sellAccumulator[broker]) sellAccumulator[broker] = { volume: 0, value: 0, dates: [] };
             sellAccumulator[broker].volume += volume;
             sellAccumulator[broker].value += value;
-
-            if (!sellAccumulator[broker].dates.includes(date)) {
-              sellAccumulator[broker].dates.push(date);
-            }
+            if (date && !sellAccumulator[broker].dates.includes(date)) sellAccumulator[broker].dates.push(date);
           }
         }
       }
@@ -581,7 +712,7 @@ export default function BrokerAccumulator() {
         broker,
         volume: data.volume,
         value: data.value,
-        avg: data.value / data.volume,
+        avg: data.volume ? data.value / data.volume : 0,
         dates: [...new Set(data.dates)].sort(),
       }))
       .sort((a, b) => b.value - a.value);
@@ -591,7 +722,7 @@ export default function BrokerAccumulator() {
         broker,
         volume: data.volume,
         value: data.value,
-        avg: data.value / data.volume,
+        avg: data.volume ? data.value / data.volume : 0,
         dates: [...new Set(data.dates)].sort(),
       }))
       .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
@@ -604,19 +735,28 @@ export default function BrokerAccumulator() {
         start: minDate.toLocaleDateString("id-ID"),
         end: maxDate.toLocaleDateString("id-ID"),
       });
+    } else {
+      setDateRange({ start: "", end: "" });
     }
   };
 
-  const formatNumber = (num) => {
-    return new Intl.NumberFormat("id-ID").format(Math.round(num));
-  };
+  const formatNumber = (num) => new Intl.NumberFormat("id-ID").format(Math.round(Number(num || 0)));
 
   const formatValue = (num) => {
-    if (num >= 1e12) return (num / 1e12).toFixed(2) + "T";
-    if (num >= 1e9) return (num / 1e9).toFixed(2) + "B";
-    if (num >= 1e6) return (num / 1e6).toFixed(2) + "M";
-    return formatNumber(num);
+    const n = Number(num || 0);
+    const abs = Math.abs(n);
+    if (abs >= 1e12) return (n / 1e12).toFixed(2) + "T";
+    if (abs >= 1e9) return (n / 1e9).toFixed(2) + "B";
+    if (abs >= 1e6) return (n / 1e6).toFixed(2) + "M";
+    return formatNumber(n);
   };
+
+  /** ===== group aggregation + RANKING (highest -> lowest) ===== */
+  const groupAggRanked = useMemo(() => {
+    const agg = buildGroupAggregation(netBuyData, netSellData);
+    const key = chartMode === "value" ? "totalValue" : "totalVolume";
+    return [...agg].sort((a, b) => Number(b[key] || 0) - Number(a[key] || 0));
+  }, [netBuyData, netSellData, chartMode]);
 
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -636,17 +776,9 @@ export default function BrokerAccumulator() {
               <span className="inline-block px-6 py-3 text-white transition-colors bg-indigo-600 rounded-lg hover:bg-indigo-700">
                 Pilih File Excel
               </span>
-              <input
-                type="file"
-                multiple
-                accept=".xlsx,.xls"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
+              <input type="file" multiple accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" />
             </label>
-            <p className="mt-4 text-sm text-gray-500">
-              Format: DD-MM-YYYY.xlsx (contoh: 20-11-2025.xlsx)
-            </p>
+            <p className="mt-4 text-sm text-gray-500">Format: DD-MM-YYYY.xlsx (contoh: 20-11-2025.xlsx)</p>
           </div>
 
           {files.length > 0 && (
@@ -672,34 +804,50 @@ export default function BrokerAccumulator() {
           )}
         </div>
 
+        {(netBuyData.length > 0 || netSellData.length > 0) && (
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-800">Mode Chart</h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setChartMode("value")}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  chartMode === "value"
+                    ? "bg-indigo-600 text-white shadow-lg"
+                    : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
+                }`}
+              >
+                Value
+              </button>
+              <button
+                onClick={() => setChartMode("volume")}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  chartMode === "volume"
+                    ? "bg-indigo-600 text-white shadow-lg"
+                    : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
+                }`}
+              >
+                Volume
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Group Ranked Chart */}
+        {netBuyData.length > 0 && netSellData.length > 0 && (
+          <div className="mb-6">
+            <GroupAccumulationChart
+              data={groupAggRanked}
+              mode={chartMode}
+              formatValue={formatValue}
+              formatNumber={formatNumber}
+            />
+          </div>
+        )}
+
         {/* Sankey Chart */}
         {netBuyData.length > 0 && netSellData.length > 0 && (
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold text-gray-800">Broker Distribution Visualization</h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setChartMode('value')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    chartMode === 'value'
-                      ? 'bg-indigo-600 text-white shadow-lg'
-                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                  }`}
-                >
-                  Value
-                </button>
-                <button
-                  onClick={() => setChartMode('volume')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    chartMode === 'volume'
-                      ? 'bg-indigo-600 text-white shadow-lg'
-                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                  }`}
-                >
-                  Volume
-                </button>
-              </div>
-            </div>
+            <h2 className="mb-4 text-2xl font-bold text-gray-800">Broker Flow Visualization</h2>
             <SankeyChart buyData={netBuyData} sellData={netSellData} mode={chartMode} />
           </div>
         )}
@@ -770,6 +918,11 @@ export default function BrokerAccumulator() {
             </div>
           </div>
         )}
+
+        <div className="mt-10 text-xs text-gray-500">
+          FYI: Smartmoney overlap dengan grup lain. Jadi ranking antar group bisa “double-counted”. Itu emang definisi
+          grupnya, bukan React lu yang ngambek 😄
+        </div>
       </div>
     </div>
   );
