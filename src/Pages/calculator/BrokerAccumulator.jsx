@@ -1,35 +1,466 @@
-import React, { useState } from "react";
-import * as XLSX from "xlsx";
+import React, { useState, useMemo } from "react";
+import { read, utils } from 'xlsx';
 import {
   Upload,
   TrendingUp,
   TrendingDown,
   FileSpreadsheet,
 } from "lucide-react";
-import { motion } from "framer-motion";
-import Navbar from "../../layouts/Navbar";
+
+// Custom Sankey Chart Component
+const BROKER_GROUPS = {
+  "Bandar Asing": ["AK", "BK", "RX"],
+  Foreign: ["ZP", "YU", "KZ"],
+  "Bandar Lokal": ["BB", "RF", "KI"],
+  Zombie: ["SS", "PP", "IN"],
+  Smartmoney: ["AK", "BK", "YU","BB","AI"],
+  Ritel: ["YP", "XC", "XL", "PD","KK"],
+};
+
+// Warna per group (bebas ubah)
+const GROUP_COLORS = {
+  "Bandar Asing": "#f59e0b", // amber
+  Foreign: "#ef4444", // red
+  "Bandar Lokal": "#a855f7", // purple
+  Zombie: "#6b7280", // gray
+  Smartmoney: "#F447D1", // gray
+  Ritel: "#38bdf8", // sky
+  Unknown: "#22c55e", // green fallback
+};
+
+const norm = (v) => String(v ?? "").toUpperCase().trim();
+
+const SankeyChart = ({ buyData = [], sellData = [], mode = "value" }) => {
+  const getBrokerGroup = (broker) => {
+    const code = norm(broker);
+    for (const [group, list] of Object.entries(BROKER_GROUPS)) {
+      if (list.includes(code)) return group;
+    }
+    return "Unknown";
+  };
+
+  const getBrokerColor = (broker) => {
+    const group = getBrokerGroup(broker);
+    return GROUP_COLORS[group] || GROUP_COLORS.Unknown;
+  };
+
+  const formatValue = (num) => {
+    const n = Number(num || 0);
+    const abs = Math.abs(n);
+    if (abs >= 1e9) return (n / 1e9).toFixed(2) + " B";
+    if (abs >= 1e6) return (n / 1e6).toFixed(2) + " M";
+    if (abs >= 1e3) return (n / 1e3).toFixed(2) + " K";
+    return n.toFixed(2);
+  };
+
+  /** =========================
+   * 2) Filter state: klik "span" legend buat filter group
+   * ========================= */
+  const [activeGroup, setActiveGroup] = useState(null); // null = All
+
+  const { filteredBuy, filteredSell } = useMemo(() => {
+    if (!activeGroup) return { filteredBuy: buyData, filteredSell: sellData };
+
+    const allowed = new Set(BROKER_GROUPS[activeGroup] || []);
+    return {
+      filteredBuy: (buyData || []).filter((x) => allowed.has(norm(x?.broker))),
+      filteredSell: (sellData || []).filter((x) => allowed.has(norm(x?.broker))),
+    };
+  }, [buyData, sellData, activeGroup]);
+
+  // Top nodes (sesuai kode awal kamu)
+  const topBuyers = (filteredBuy || []).slice(0, 7);
+  const topSellers = (filteredSell || []).slice(0, 7);
+
+  /** =========================
+   * 3) Layout constants
+   * ========================= */
+  const chartHeight = 600;
+  const margin = { top: 80, right: 140, bottom: 60, left: 140 };
+  const nodeWidth = 20;
+  const nodePadding = 20;
+  const width = 1000;
+  const innerHeight = chartHeight - margin.top - margin.bottom;
+
+  /** =========================
+   * 4) Totals + safety guards
+   * ========================= */
+  const totalBuyValue = topBuyers.reduce(
+    (sum, b) => sum + (mode === "value" ? Number(b?.value || 0) : Number(b?.volume || 0)),
+    0
+  );
+
+  const totalSellValue = topSellers.reduce(
+    (sum, s) =>
+      sum + Math.abs(mode === "value" ? Number(s?.value || 0) : Number(s?.volume || 0)),
+    0
+  );
+
+  const maxTotal = Math.max(totalBuyValue, totalSellValue, 1); // prevent 0 -> NaN
+  const noData = topBuyers.length === 0 || topSellers.length === 0;
+
+  const clickableSpanBase =
+    "inline-flex items-center gap-2 px-4 py-2 rounded-lg border transition cursor-pointer select-none";
+
+  const makeSpanA11y = (fn) => ({
+    role: "button",
+    tabIndex: 0,
+    onClick: fn,
+    onKeyDown: (e) => {
+      if (e.key === "Enter" || e.key === " ") fn();
+    },
+  });
+
+  return (
+    <div className="w-full p-6 overflow-x-auto shadow-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl">
+      {/* Info Filter */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-sm text-gray-300">
+          Filter:{" "}
+          <span className="font-semibold text-gray-100">
+            {activeGroup ? activeGroup : "All"}
+          </span>
+        </div>
+
+        {/* Quick clear */}
+        {activeGroup && (
+          <button
+            type="button"
+            onClick={() => setActiveGroup(null)}
+            className="text-xs px-3 py-1.5 rounded-lg border border-gray-600 bg-gray-800 text-gray-200 hover:border-gray-400 transition"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {noData ? (
+        <div className="w-full h-[420px] flex items-center justify-center text-gray-300">
+          Tidak ada data untuk ditampilkan{activeGroup ? ` (filter: ${activeGroup})` : ""}.
+        </div>
+      ) : (
+        <svg width={width} height={chartHeight} className="mx-auto">
+          <defs>
+            {/* Gradients per pair */}
+            {topBuyers.map((buyer, i) =>
+              topSellers.map((seller, j) => {
+                const id = `gradient-${i}-${j}`;
+                const buyColor = getBrokerColor(buyer?.broker);
+                const sellColor = getBrokerColor(seller?.broker);
+
+                return (
+                  <linearGradient key={id} id={id} x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor={buyColor} stopOpacity="0.7" />
+                    <stop offset="50%" stopColor={buyColor} stopOpacity="0.35" />
+                    <stop offset="100%" stopColor={sellColor} stopOpacity="0.7" />
+                  </linearGradient>
+                );
+              })
+            )}
+
+            {/* Glow effect */}
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+              <feMerge>
+                <feMergeNode in="coloredBlur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+
+            {/* Background grid */}
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path
+                d="M 40 0 L 0 0 0 40"
+                fill="none"
+                stroke="rgba(255,255,255,0.03)"
+                strokeWidth="1"
+              />
+            </pattern>
+          </defs>
+
+          <rect width={width} height={chartHeight} fill="url(#grid)" />
+
+
+          {/* Labels */}
+          <text
+            x={margin.left - 20}
+            y={margin.top - 30}
+            textAnchor="start"
+            className="text-lg font-bold fill-green-400"
+            style={{ filter: "drop-shadow(0 0 6px rgba(34, 197, 94, 0.5))" }}
+          >
+            Buyer
+          </text>
+          <text
+            x={width - margin.right + 20}
+            y={margin.top - 30}
+            textAnchor="end"
+            className="text-lg font-bold fill-red-400"
+            style={{ filter: "drop-shadow(0 0 6px rgba(239, 68, 68, 0.5))" }}
+          >
+            Seller
+          </text>
+
+          {/* Main render */}
+          {(() => {
+            // Buyer positions
+            let currentBuyY = margin.top;
+            const buyerPositions = topBuyers.map((buyer) => {
+              const value = mode === "value" ? Number(buyer?.value || 0) : Number(buyer?.volume || 0);
+              const height = (value / maxTotal) * innerHeight * 0.9;
+              const safeHeight = Math.max(height, 8); // avoid ultra-thin nodes
+              const pos = { y: currentBuyY, height: safeHeight, value };
+              currentBuyY += safeHeight + nodePadding;
+              return pos;
+            });
+
+            // Seller positions
+            let currentSellY = margin.top;
+            const sellerPositions = topSellers.map((seller) => {
+              const value = Math.abs(
+                mode === "value" ? Number(seller?.value || 0) : Number(seller?.volume || 0)
+              );
+              const height = (value / maxTotal) * innerHeight * 0.9;
+              const safeHeight = Math.max(height, 8);
+              const pos = { y: currentSellY, height: safeHeight, value };
+              currentSellY += safeHeight + nodePadding;
+              return pos;
+            });
+
+            const safeTotalBuy = Math.max(totalBuyValue, 1);
+            const safeTotalSell = Math.max(totalSellValue, 1);
+
+            return (
+              <>
+                {/* Flows */}
+                {topBuyers.map((buyer, buyerIdx) => {
+                  const buyerPos = buyerPositions[buyerIdx];
+                  const buyerValue =
+                    mode === "value" ? Number(buyer?.value || 0) : Number(buyer?.volume || 0);
+
+                  return topSellers.map((seller, sellerIdx) => {
+                    const sellerPos = sellerPositions[sellerIdx];
+                    const sellerValue = Math.abs(
+                      mode === "value" ? Number(seller?.value || 0) : Number(seller?.volume || 0)
+                    );
+
+                    // Flow height (simple proportional)
+                    const flowRatio =
+                      Math.min(buyerValue / safeTotalBuy, sellerValue / safeTotalSell) / topSellers.length;
+
+                    const flowHeight = Math.max(flowRatio * innerHeight * 0.8, 2);
+
+                    const x1 = margin.left + nodeWidth;
+                    const x2 = width - margin.right;
+
+                    const y1 = buyerPos.y + (buyerPos.height * sellerIdx) / topSellers.length;
+                    const y2 = sellerPos.y + (sellerPos.height * buyerIdx) / topBuyers.length;
+
+                    const cp1x = x1 + (x2 - x1) * 0.4;
+                    const cp2x = x1 + (x2 - x1) * 0.6;
+
+                    const path = `M ${x1} ${y1} C ${cp1x} ${y1}, ${cp2x} ${y2}, ${x2} ${y2}`;
+
+                    return (
+                      <path
+                        key={`flow-${buyerIdx}-${sellerIdx}`}
+                        d={path}
+                        fill="none"
+                        stroke={`url(#gradient-${buyerIdx}-${sellerIdx})`}
+                        strokeWidth={flowHeight}
+                        opacity="0.75"
+                        style={{ mixBlendMode: "screen" }}
+                      />
+                    );
+                  });
+                })}
+
+                {/* Buyer nodes */}
+                {topBuyers.map((buyer, idx) => {
+                  const pos = buyerPositions[idx];
+                  const value =
+                    mode === "value" ? Number(buyer?.value || 0) : Number(buyer?.volume || 0);
+                  const color = getBrokerColor(buyer?.broker);
+
+                  return (
+                    <g key={`buyer-${idx}`} style={{ filter: "url(#glow)" }}>
+                      <rect
+                        x={margin.left - 45}
+                        y={pos.y}
+                        width={10}
+                        height={pos.height}
+                        fill={color}
+                        rx="5"
+                        opacity="0.8"
+                      />
+
+                      <rect
+                        x={margin.left}
+                        y={pos.y}
+                        width={nodeWidth}
+                        height={pos.height}
+                        fill={color}
+                        stroke="rgba(0, 0, 0, 0.5)"
+                        strokeWidth="2"
+                        rx="3"
+                      />
+
+                      <text
+                        x={margin.left - 55}
+                        y={pos.y + pos.height / 2 - 8}
+                        textAnchor="end"
+                        dominantBaseline="middle"
+                        className="text-lg font-bold fill-gray-100"
+                        style={{ textShadow: "2px 2px 4px rgba(0,0,0,0.8)" }}
+                      >
+                        {buyer?.broker}
+                      </text>
+
+                      <text
+                        x={margin.left - 55}
+                        y={pos.y + pos.height / 2 + 10}
+                        textAnchor="end"
+                        dominantBaseline="middle"
+                        className="text-sm font-medium fill-gray-400"
+                      >
+                        {formatValue(value)}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Seller nodes */}
+                {topSellers.map((seller, idx) => {
+                  const pos = sellerPositions[idx];
+                  const value = Math.abs(
+                    mode === "value" ? Number(seller?.value || 0) : Number(seller?.volume || 0)
+                  );
+                  const color = getBrokerColor(seller?.broker);
+
+                  return (
+                    <g key={`seller-${idx}`} style={{ filter: "url(#glow)" }}>
+                      <rect
+                        x={width - margin.right - nodeWidth}
+                        y={pos.y}
+                        width={nodeWidth}
+                        height={pos.height}
+                        fill={color}
+                        stroke="rgba(0, 0, 0, 0.5)"
+                        strokeWidth="2"
+                        rx="3"
+                      />
+
+                      <rect
+                        x={width - margin.right + 35}
+                        y={pos.y}
+                        width={10}
+                        height={pos.height}
+                        fill={color}
+                        rx="5"
+                        opacity="0.8"
+                      />
+
+                      <text
+                        x={width - margin.right + 55}
+                        y={pos.y + pos.height / 2 - 8}
+                        textAnchor="start"
+                        dominantBaseline="middle"
+                        className="text-lg font-bold fill-gray-100"
+                        style={{ textShadow: "2px 2px 4px rgba(0,0,0,0.8)" }}
+                      >
+                        {seller?.broker}
+                      </text>
+
+                      <text
+                        x={width - margin.right + 55}
+                        y={pos.y + pos.height / 2 + 10}
+                        textAnchor="start"
+                        dominantBaseline="middle"
+                        className="text-sm font-medium fill-gray-400"
+                      >
+                        {formatValue(value)}
+                      </text>
+                    </g>
+                  );
+                })}
+              </>
+            );
+          })()}
+        </svg>
+      )}
+
+      {/* === Legend Filter "SPAN" (klik spannya untuk filter group) === */}
+      <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
+        {/* All */}
+        <span
+          {...makeSpanA11y(() => setActiveGroup(null))}
+          className={`${clickableSpanBase}
+            ${
+              !activeGroup
+                ? "bg-indigo-500/20 border-indigo-400 text-indigo-200"
+                : "bg-gray-800 border-gray-700 text-gray-200 hover:border-gray-500"
+            }`}
+          title="Tampilkan semua broker"
+        >
+          All
+        </span>
+
+        {/* Groups */}
+        {Object.keys(BROKER_GROUPS).map((group) => {
+          const isActive = activeGroup === group;
+          const color = GROUP_COLORS[group] || GROUP_COLORS.Unknown;
+
+          const toggle = () => setActiveGroup((prev) => (prev === group ? null : group));
+
+          return (
+            <span
+              key={group}
+              {...makeSpanA11y(toggle)}
+              className={`${clickableSpanBase}
+                ${
+                  isActive
+                    ? "bg-gray-700 border-gray-400"
+                    : "bg-gray-800 border-gray-700 hover:border-gray-500"
+                }`}
+              title={`Filter: ${group} (${BROKER_GROUPS[group].join(", ")})`}
+            >
+              <span
+                className="w-5 h-5 rounded-md"
+                style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}80` }}
+              />
+              <span className="text-sm font-semibold text-gray-200">
+                ● {group}
+                <span className="font-medium text-gray-400"> ({BROKER_GROUPS[group].join(", ")})</span>
+              </span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 
 export default function BrokerAccumulator() {
   const [files, setFiles] = useState([]);
   const [netBuyData, setNetBuyData] = useState([]);
   const [netSellData, setNetSellData] = useState([]);
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
+  const [chartMode, setChartMode] = useState("value");
 
-  // Handle file upload and parse Excel data
   const handleFileUpload = async (e) => {
     const uploadedFiles = Array.from(e.target.files);
     const allData = [];
 
     for (const file of uploadedFiles) {
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data);
+      const workbook = read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+      const jsonData = utils.sheet_to_json(worksheet, {
         header: 1,
         defval: "",
       });
 
-      // Extract date from filename (format: DD-MM-YYYY.xlsx)
       const dateMatch = file.name.match(/(\d{2}-\d{2}-\d{4})/);
       const fileDate = dateMatch ? dateMatch[1] : "";
 
@@ -44,120 +475,12 @@ export default function BrokerAccumulator() {
     processData(allData);
   };
 
-  // Process and accumulate Net Buy and Net Sell data
-  //   const processData = (filesData) => {
-  //     const buyAccumulator = {};
-  //     const sellAccumulator = {};
-  //     let minDate = null;
-  //     let maxDate = null;
-
-  //     filesData.forEach(({ date, data }) => {
-  //       const [day, month, year] = date.split('-');
-  //       const dateObj = new Date(`${year}-${month}-${day}`);
-
-  //       if (!minDate || dateObj < minDate) minDate = dateObj;
-  //       if (!maxDate || dateObj > maxDate) maxDate = dateObj;
-
-  //       let headerRow = -1;
-  //       for (let i = 0; i < Math.min(10, data.length); i++) {
-  //         const row = data[i];
-  //         const rowStr = row.map(cell => (cell || '').toString().toLowerCase()).join('|');
-  //         if (rowStr.includes('net buy') && rowStr.includes('net sell')) {
-  //           headerRow = i;
-  //           break;
-  //         }
-  //       }
-
-  //       if (headerRow === -1) return;
-
-  //       const headerRowData = data[headerRow];
-  //       let netBuyCol = -1;
-  //       let netSellCol = -1;
-
-  //       for (let col = 0; col < headerRowData.length; col++) {
-  //         const cellValue = (headerRowData[col] || '').toString().toLowerCase();
-  //         if (cellValue.includes('net') && cellValue.includes('buy')) {
-  //           netBuyCol = col;
-  //         }
-  //         if (cellValue.includes('net') && cellValue.includes('sell')) {
-  //           netSellCol = col;
-  //         }
-  //       }
-
-  //       let brokerHeaderRow = headerRow + 1;
-
-  //       let buyBrokerCol = -1;
-  //       let sellBrokerCol = -1;
-
-  //       if (brokerHeaderRow < data.length) {
-  //         const brokerRow = data[brokerHeaderRow];
-  //         for (let col = 0; col < brokerRow.length; col++) {
-  //           const cellValue = (brokerRow[col] || '').toString().toLowerCase().trim();
-  //           if (cellValue === 'broker') {
-  //             if (buyBrokerCol === -1 && col < netSellCol) {
-  //               buyBrokerCol = col;
-  //             } else if (sellBrokerCol === -1 && col >= netSellCol) {
-  //               sellBrokerCol = col;
-  //             }
-  //           }
-  //         }
-  //       }
-
-  //       console.log('Net Sell Column:', netSellCol)
-  //       // Logging for Buy Accumulator
-  //       if (buyBrokerCol >= 0) {
-  //         for (let i = brokerHeaderRow + 1; i < data.length; i++) {
-  //           const row = data[i];
-  //           if (!row[buyBrokerCol]) continue;
-
-  //           const broker = row[buyBrokerCol].toString().trim();
-  //           if (!broker || broker.toLowerCase() === 'broker') continue;
-
-  //           const volume = parseFloat(row[buyBrokerCol + 1]) || 0;
-  //           const value = parseFloat(row[buyBrokerCol + 2]) || 0;
-
-  //           if (volume > 0 && value > 0) {
-  //             if (!buyAccumulator[broker]) {
-  //               buyAccumulator[broker] = { volume: 0, value: 0, dates: [] };
-  //             }
-  //             buyAccumulator[broker].volume += volume;
-  //             buyAccumulator[broker].value += value;
-  //             if (!buyAccumulator[broker].dates.includes(date)) {
-  //               buyAccumulator[broker].dates.push(date);
-  //             }
-  //           }
-  //         }
-  //       }
-
-  //       // Logging for Sell Accumulator
-  //  if (sellBrokerCol >= 0) {
-  //         for (let i = brokerHeaderRow + 1; i < data.length; i++) {
-  //           const row = data[i];
-  //           if (!row[sellBrokerCol]) continue;
-  //           const broker = row[sellBrokerCol].toString().trim();
-  //           if (!broker || broker.toLowerCase() === 'broker') continue;
-
-  //           const volume = parseFloat(row[sellBrokerCol + 1]) || 0;
-  //           const value = parseFloat(row[sellBrokerCol + 2]) || 0;
-
-  //           // Process sell data (volume/value might be negative)
-  //           if (volume !== 0 && value !== 0) {
-  //             if (!sellAccumulator[broker]) sellAccumulator[broker] = { volume: 0, value: 0, dates: [] };
-  //             sellAccumulator[broker].volume += volume;
-  //             sellAccumulator[broker].value += value;
-  //             if (!sellAccumulator[broker].dates.includes(date)) sellAccumulator[broker].dates.push(date);
-  //           }
-  //         }
-  //       }
-  //     });
-
   const processData = (filesData) => {
     const buyAccumulator = {};
     const sellAccumulator = {};
     let minDate = null;
     let maxDate = null;
 
-    // Helper untuk deteksi grup kolom: broker | volume | value
     function findBrokerGroups(row) {
       const groups = [];
       for (let i = 0; i < row.length - 2; i++) {
@@ -177,14 +500,12 @@ export default function BrokerAccumulator() {
     }
 
     filesData.forEach(({ date, data }) => {
-      // Parsing tanggal
       const [day, month, year] = date.split("-");
       const dateObj = new Date(`${year}-${month}-${day}`);
 
       if (!minDate || dateObj < minDate) minDate = dateObj;
       if (!maxDate || dateObj > maxDate) maxDate = dateObj;
 
-      // Cari baris header yang mengandung "net buy" & "net sell"
       let headerRow = -1;
       for (let i = 0; i < Math.min(10, data.length); i++) {
         const row = data[i];
@@ -199,21 +520,16 @@ export default function BrokerAccumulator() {
 
       if (headerRow === -1) return;
 
-      // Baris berikutnya berisi header broker BUY/SELL
       const header2 = data[headerRow + 1];
       if (!header2) return;
 
       const groups = findBrokerGroups(header2);
 
-      // ========================
-      //  SECTION BUY
-      // ========================
       if (groups.length >= 1) {
         const buyCols = groups[0];
 
         for (let i = headerRow + 2; i < data.length; i++) {
           const row = data[i];
-
           const broker = (row[buyCols.brokerCol] || "").trim();
           if (!broker || broker.toLowerCase() === "broker") continue;
 
@@ -234,22 +550,17 @@ export default function BrokerAccumulator() {
         }
       }
 
-      // ========================
-      //  SECTION SELL
-      // ========================
       if (groups.length >= 2) {
         const sellCols = groups[1];
 
         for (let i = headerRow + 2; i < data.length; i++) {
           const row = data[i];
-
           const broker = (row[sellCols.brokerCol] || "").trim();
           if (!broker || broker.toLowerCase() === "broker") continue;
 
           const volume = parseFloat(row[sellCols.volumeCol]) || 0;
           const value = parseFloat(row[sellCols.valueCol]) || 0;
 
-          // SELL biasanya nilai negatif / volume negatif
           if (volume !== 0 && value !== 0) {
             if (!sellAccumulator[broker]) {
               sellAccumulator[broker] = { volume: 0, value: 0, dates: [] };
@@ -265,11 +576,6 @@ export default function BrokerAccumulator() {
       }
     });
 
-    // Log to see buy and sell accumulators
-    console.log("Buy Accumulator:", buyAccumulator);
-    console.log("Sell Akum:", sellAccumulator);
-
-    // Sorting and setting the net buy and sell data
     const buyArray = Object.entries(buyAccumulator)
       .map(([broker, data]) => ({
         broker,
@@ -313,16 +619,7 @@ export default function BrokerAccumulator() {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-      className="min-h-screen p-6 bg-gradient-to-br from-blue-50 to-indigo-100"
-    >
-      <Navbar />
-      <br />
-      <br />
-
+    <div className="min-h-screen p-6 bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="mx-auto max-w-7xl">
         <div className="p-8 mb-6 bg-white shadow-xl rounded-2xl">
           <h1 className="flex items-center gap-3 mb-2 text-3xl font-bold text-gray-800">
@@ -330,8 +627,7 @@ export default function BrokerAccumulator() {
             Kalkulator Akumulasi Broker
           </h1>
           <p className="mb-6 text-gray-600">
-            Upload multiple file Excel untuk mengkalkulasi akumulasi Net Buy dan
-            Net Sell
+            Upload multiple file Excel untuk mengkalkulasi akumulasi Net Buy dan Net Sell
           </p>
 
           <div className="p-8 text-center transition-colors border-2 border-indigo-300 border-dashed rounded-xl hover:border-indigo-500">
@@ -355,9 +651,7 @@ export default function BrokerAccumulator() {
 
           {files.length > 0 && (
             <div className="p-4 mt-6 rounded-lg bg-indigo-50">
-              <h3 className="mb-2 font-semibold text-gray-700">
-                File yang diupload:
-              </h3>
+              <h3 className="mb-2 font-semibold text-gray-700">File yang diupload:</h3>
               <div className="flex flex-wrap gap-2">
                 {files.map((file, idx) => (
                   <span
@@ -370,24 +664,49 @@ export default function BrokerAccumulator() {
               </div>
               {dateRange.start && (
                 <p className="mt-3 text-sm text-gray-600">
-                  Periode:{" "}
-                  <span className="font-semibold">{dateRange.start}</span> s/d{" "}
+                  Periode: <span className="font-semibold">{dateRange.start}</span> s/d{" "}
                   <span className="font-semibold">{dateRange.end}</span>
-                </p>
-              )}
-              {netBuyData.length > 0 && (
-                <p className="mt-2 text-sm font-semibold text-green-600">
-                  ✓ Data berhasil diproses: {netBuyData.length} broker Net Buy,{" "}
-                  {netSellData.length} broker Net Sell
                 </p>
               )}
             </div>
           )}
         </div>
 
+        {/* Sankey Chart */}
+        {netBuyData.length > 0 && netSellData.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">Broker Distribution Visualization</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setChartMode('value')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                    chartMode === 'value'
+                      ? 'bg-indigo-600 text-white shadow-lg'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                  }`}
+                >
+                  Value
+                </button>
+                <button
+                  onClick={() => setChartMode('volume')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                    chartMode === 'volume'
+                      ? 'bg-indigo-600 text-white shadow-lg'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                  }`}
+                >
+                  Volume
+                </button>
+              </div>
+            </div>
+            <SankeyChart buyData={netBuyData} sellData={netSellData} mode={chartMode} />
+          </div>
+        )}
+
+        {/* Tables */}
         {(netBuyData.length > 0 || netSellData.length > 0) && (
           <div className="grid gap-6 md:grid-cols-2">
-            {/* Net Buy Table */}
             <div className="p-6 bg-white shadow-xl rounded-2xl">
               <h2 className="flex items-center gap-2 mb-4 text-2xl font-bold text-green-600">
                 <TrendingUp size={28} />
@@ -397,44 +716,21 @@ export default function BrokerAccumulator() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b-2 border-green-200">
-                      <th className="px-2 py-3 font-semibold text-left text-gray-700">
-                        #
-                      </th>
-                      <th className="px-2 py-3 font-semibold text-left text-gray-700">
-                        Broker
-                      </th>
-                      <th className="px-2 py-3 font-semibold text-right text-gray-700">
-                        Volume
-                      </th>
-                      <th className="px-2 py-3 font-semibold text-right text-gray-700">
-                        Value
-                      </th>
-                      <th className="px-2 py-3 font-semibold text-right text-gray-700">
-                        Avg
-                      </th>
+                      <th className="px-2 py-3 font-semibold text-left text-gray-700">#</th>
+                      <th className="px-2 py-3 font-semibold text-left text-gray-700">Broker</th>
+                      <th className="px-2 py-3 font-semibold text-right text-gray-700">Volume</th>
+                      <th className="px-2 py-3 font-semibold text-right text-gray-700">Value</th>
+                      <th className="px-2 py-3 font-semibold text-right text-gray-700">Avg</th>
                     </tr>
                   </thead>
                   <tbody>
                     {netBuyData.slice(0, 20).map((item, idx) => (
-                      <tr
-                        key={idx}
-                        className="transition-colors border-b border-gray-100 hover:bg-green-50"
-                      >
-                        <td className="px-2 py-3 font-bold text-green-600">
-                          {idx + 1}
-                        </td>
-                        <td className="px-2 py-3 font-semibold text-gray-800">
-                          {item.broker}
-                        </td>
-                        <td className="px-2 py-3 text-right text-gray-700">
-                          {formatNumber(item.volume)}
-                        </td>
-                        <td className="px-2 py-3 font-semibold text-right text-gray-800">
-                          {formatValue(item.value)}
-                        </td>
-                        <td className="px-2 py-3 text-right text-gray-600">
-                          {formatNumber(item.avg)}
-                        </td>
+                      <tr key={idx} className="transition-colors border-b border-gray-100 hover:bg-green-50">
+                        <td className="px-2 py-3 font-bold text-green-600">{idx + 1}</td>
+                        <td className="px-2 py-3 font-semibold text-gray-800">{item.broker}</td>
+                        <td className="px-2 py-3 text-right text-gray-700">{formatNumber(item.volume)}</td>
+                        <td className="px-2 py-3 font-semibold text-right text-gray-800">{formatValue(item.value)}</td>
+                        <td className="px-2 py-3 text-right text-gray-600">{formatNumber(item.avg)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -442,7 +738,6 @@ export default function BrokerAccumulator() {
               </div>
             </div>
 
-            {/* Net Sell Table */}
             <div className="p-6 bg-white shadow-xl rounded-2xl">
               <h2 className="flex items-center gap-2 mb-4 text-2xl font-bold text-red-600">
                 <TrendingDown size={28} />
@@ -452,44 +747,21 @@ export default function BrokerAccumulator() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b-2 border-red-200">
-                      <th className="px-2 py-3 font-semibold text-left text-gray-700">
-                        #
-                      </th>
-                      <th className="px-2 py-3 font-semibold text-left text-gray-700">
-                        Broker
-                      </th>
-                      <th className="px-2 py-3 font-semibold text-right text-gray-700">
-                        Volume
-                      </th>
-                      <th className="px-2 py-3 font-semibold text-right text-gray-700">
-                        Value
-                      </th>
-                      <th className="px-2 py-3 font-semibold text-right text-gray-700">
-                        Avg
-                      </th>
+                      <th className="px-2 py-3 font-semibold text-left text-gray-700">#</th>
+                      <th className="px-2 py-3 font-semibold text-left text-gray-700">Broker</th>
+                      <th className="px-2 py-3 font-semibold text-right text-gray-700">Volume</th>
+                      <th className="px-2 py-3 font-semibold text-right text-gray-700">Value</th>
+                      <th className="px-2 py-3 font-semibold text-right text-gray-700">Avg</th>
                     </tr>
                   </thead>
                   <tbody>
                     {netSellData.slice(0, 20).map((item, idx) => (
-                      <tr
-                        key={idx}
-                        className="transition-colors border-b border-gray-100 hover:bg-red-50"
-                      >
-                        <td className="px-2 py-3 font-bold text-red-600">
-                          {idx + 1}
-                        </td>
-                        <td className="px-2 py-3 font-semibold text-gray-800">
-                          {item.broker}
-                        </td>
-                        <td className="px-2 py-3 text-right text-gray-700">
-                          {formatNumber(item.volume)}
-                        </td>
-                        <td className="px-2 py-3 font-semibold text-right text-gray-800">
-                          {formatValue(item.value)}
-                        </td>
-                        <td className="px-2 py-3 text-right text-gray-600">
-                          {formatNumber(item.avg)}
-                        </td>
+                      <tr key={idx} className="transition-colors border-b border-gray-100 hover:bg-red-50">
+                        <td className="px-2 py-3 font-bold text-red-600">{idx + 1}</td>
+                        <td className="px-2 py-3 font-semibold text-gray-800">{item.broker}</td>
+                        <td className="px-2 py-3 text-right text-gray-700">{formatNumber(item.volume)}</td>
+                        <td className="px-2 py-3 font-semibold text-right text-gray-800">{formatValue(item.value)}</td>
+                        <td className="px-2 py-3 text-right text-gray-600">{formatNumber(item.avg)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -499,6 +771,6 @@ export default function BrokerAccumulator() {
           </div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
