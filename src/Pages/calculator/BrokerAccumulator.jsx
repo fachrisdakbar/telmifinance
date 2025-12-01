@@ -8,24 +8,28 @@ import { Upload, TrendingUp, TrendingDown, FileSpreadsheet } from "lucide-react"
 const BROKER_GROUPS = {
   "Bandar Asing": ["AK", "BK", "RX"],
   Foreign: ["ZP", "YU", "KZ"],
-  "Bandar Lokal": ["BB", "RF", "KI", "MG","LG"],
+  "Bandar Lokal": ["BB", "RF", "KI", "MG", "LG"],
   Zombie: ["SS", "PP", "IN", "PG", "FZ"],
   Smartmoney: ["RF", "AK", "BK", "BB", "DX", "ZP", "HP", "KZ", "RX"],
   Ritel: ["YP", "XC", "XL", "PD", "KK", "CP", "AZ"],
   BUMN: ["CC"],
+  BUMD: ["SQ"],
 };
 
 const GROUP_COLORS = {
-  "Bandar Asing": "#f59e0b",
-  Foreign: "#ef4444",
-  "Bandar Lokal": "#a855f7",
-  Zombie: "#6b7280",
-  Smartmoney: "#F447D1",
-  Ritel: "#38bdf8",
-  BUMN: "#ffff00",
-  Unknown: "#22c55e",
-};
+  // sesuai request lu:
+  Smartmoney: "#22c55e",       // Hijau
+  "Bandar Lokal": "#3b82f6",   // Biru
+  "Bandar Asing": "#facc15",   // Kuning
+  Foreign: "#f97316",          // Oren
+  Ritel: "#ef4444",            // Merah
+  BUMN: "#a855f7",             // Ungu
+  Zombie: "#6b7280",           // Abu
+  Unknown: "#52eeff",          // Pink
 
+  // bonus: Djarum lu belum minta warnanya, jadi gw set netral (bisa lu ubah)
+  BUMD: "#ffff",           // hitam/charcoal
+};
 const norm = (v) => String(v ?? "").toUpperCase().trim();
 
 /** broker -> [groups] (supports overlap) */
@@ -581,11 +585,6 @@ const GroupAccumulationChart = ({ data = [], mode = "value", formatValue, format
           );
         })}
       </div>
-
-      <p className="mt-4 text-xs text-gray-500">
-        Note: karena group bisa overlap (Smartmoney nyomot broker dari grup lain), ranking total antar group bisa
-        double-counted. Itu expected, bukan bug.
-      </p>
     </div>
   );
 };
