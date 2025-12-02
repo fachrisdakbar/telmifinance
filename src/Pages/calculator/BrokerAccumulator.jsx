@@ -7,13 +7,14 @@ import { Upload, TrendingUp, TrendingDown, FileSpreadsheet } from "lucide-react"
  * ========================= */
 const BROKER_GROUPS = {
   "Bandar Asing": ["AK", "BK", "RX"],
-  Foreign: ["ZP", "YU", "KZ"],
+  Foreign: ["ZP", "YU", "KZ","DR","RB","AG","FS","XA","CS","GW","DP","AI","LS","LH","AH","DU","MS","CG","TP","BQ","HD"],
   "Bandar Lokal": ["BB", "RF", "KI", "MG", "LG"],
   Zombie: ["SS", "PP", "IN", "PG", "FZ"],
   Smartmoney: ["RF", "AK", "BK", "BB", "DX", "ZP", "HP", "KZ", "RX"],
   Ritel: ["YP", "XC", "XL", "PD", "KK", "CP", "AZ"],
   BUMN: ["CC"],
   BUMD: ["SQ"],
+  Lokal:["MK","BW","DB","HG","ML","PI","EL","MI","EP","IF","AZ","ZR","AN","MU","YJ","BJ","BJ","BM","TA","LK","BD","KW","PK","FM","KS","BR","RG","ES","ID","QA","SF","GA","PS","OK","JB","YB","TS","FG","PC","PP","AT","PO","AR","SA","FO","IT","SC","SD","SY","CM","FA","SP","WW","DS","SM","DG","BP","AY","KC","HK","IH","PG","GR","PF","DM","DH","SH","AD","BS","RO","AP","II","BZ","AF","DD","RS","AO","IU","BF","TX","YO","CD","IP","TF"]
 };
 
 const GROUP_COLORS = {
@@ -25,7 +26,7 @@ const GROUP_COLORS = {
   Ritel: "#ef4444",            // Merah
   BUMN: "#a855f7",             // Ungu
   Zombie: "#6b7280",           // Abu
-  Unknown: "#52eeff",          // Pink
+  Lokal: "#52eeff",          // Pink
 
   // bonus: Djarum lu belum minta warnanya, jadi gw set netral (bisa lu ubah)
   BUMD: "#ffff",           // hitam/charcoal
